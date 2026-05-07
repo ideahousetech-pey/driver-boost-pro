@@ -36,7 +36,7 @@ jobs:
       - name: Run tests (optional)
         run: flutter test || true
 
-      - name: Build release APK (unsigned)
+      - name: Build release APK (signed)
         run: flutter build apk --release
 
       - name: Upload APK as artifact
