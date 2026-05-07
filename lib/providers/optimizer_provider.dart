@@ -239,10 +239,9 @@ class OptimizerProvider extends ChangeNotifier {
     }
     try {
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 3),
-        ),
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 3),
+  
       );
       return GpsStatus(
         isFixed: true,
