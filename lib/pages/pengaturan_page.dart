@@ -25,7 +25,10 @@ class PengaturanPage extends StatelessWidget {
                         style: TextStyle(color: AppColors.textPrimary)),
                     value: provider.notificationEnabled,
                     onChanged: (val) => provider.setNotificationEnabled(val),
-                    activeThumbColor: AppColors.accentGreen,
+                    thumbColor: WidgetStateProperty.resolveWith((states) =>
+                        states.contains(WidgetState.selected)
+                         ? AppColors.accentGreen
+                         : null),
                     secondary: const Icon(Icons.notifications_active,
                         color: AppColors.accentGreen),
                   ),
