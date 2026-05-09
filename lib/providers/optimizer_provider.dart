@@ -60,6 +60,8 @@ class OptimizerProvider extends ChangeNotifier {
   // -------------------------------------------------------------
   String _gpsAccuracy = 'high';   // 'low', 'high', 'max'
   String get gpsAccuracy => _gpsAccuracy;
+  String _themeMode = 'dark';   // 'light', 'dark', atau 'system'
+  String get themeMode => _themeMode;
 
   bool _keepScreenOn = true;
   bool get keepScreenOn => _keepScreenOn;
@@ -121,6 +123,7 @@ class OptimizerProvider extends ChangeNotifier {
     _autoReconnect = prefs.getBool('autoReconnect') ?? true;
     _modeHematBaterai = prefs.getBool('modeHematBaterai') ?? false;
     _notifikasiDrop = prefs.getBool('notifikasiDrop') ?? true;
+    _themeMode = prefs.getString('themeMode') ?? 'dark';
   }
 
   Future<void> _saveSettings() async {
@@ -186,6 +189,13 @@ class OptimizerProvider extends ChangeNotifier {
   Future<void> setNotifikasiDrop(bool value) async {
     _notifikasiDrop = value;
     await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(String value) async {
+    _themeMode = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('themeMode', value);
     notifyListeners();
   }
 

@@ -10,7 +10,6 @@ import 'utils/constants.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inisialisasi FlutterForegroundTask (v8.3.0+)
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'driver_optimizer_channel',
@@ -18,7 +17,6 @@ void main() async {
       channelDescription: 'Notifikasi untuk monitoring koneksi & GPS',
       channelImportance: NotificationChannelImportance.LOW,
       priority: NotificationPriority.LOW,
-      // iconData sudah tidak digunakan, biarkan default
     ),
     iosNotificationOptions: const IOSNotificationOptions(
       showNotification: true,
@@ -51,25 +49,60 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Driver Optimizer',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: AppColors.accentGreen,
-        scaffoldBackgroundColor: AppColors.background,
-        cardColor: AppColors.card,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: AppColors.card,
-          selectedItemColor: AppColors.accentGreen,
-          unselectedItemColor: AppColors.textSecondary,
-        ),
-      ),
-      home: const MainScreen(),
+    return Consumer<OptimizerProvider>(
+      builder: (context, provider, _) {
+        ThemeMode themeMode;
+        switch (provider.themeMode) {
+          case 'light':
+            themeMode = ThemeMode.light;
+            break;
+          case 'dark':
+            themeMode = ThemeMode.dark;
+            break;
+          default:
+            themeMode = ThemeMode.system;
+        }
+
+        return MaterialApp(
+          title: 'Driver Optimizer',
+          debugShowCheckedModeBanner: false,
+          themeMode: themeMode,
+          // Tema gelap
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            primaryColor: AppColors.accentGreen,
+            scaffoldBackgroundColor: AppColors.background,
+            cardColor: AppColors.card,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: AppColors.background,
+              elevation: 0,
+            ),
+            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+              backgroundColor: AppColors.card,
+              selectedItemColor: AppColors.accentGreen,
+              unselectedItemColor: AppColors.textSecondary,
+            ),
+          ),
+          // Tema terang
+          theme: ThemeData(
+            brightness: Brightness.light,
+            primaryColor: AppColors.accentGreen,
+            scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+            cardColor: Colors.white,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFFF5F5F5),
+              elevation: 0,
+              foregroundColor: Colors.black,
+            ),
+            bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+              backgroundColor: Colors.white,
+              selectedItemColor: AppColors.accentGreen,
+              unselectedItemColor: Colors.grey,
+            ),
+          ),
+          home: const MainScreen(),
+        );
+      },
     );
   }
 }

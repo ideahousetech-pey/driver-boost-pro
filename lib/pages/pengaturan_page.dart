@@ -9,37 +9,40 @@ class PengaturanPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final cardColor = Theme.of(context).cardColor;
+
     return Consumer<OptimizerProvider>(
       builder: (context, provider, _) {
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: SafeArea(
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text('Pengaturan', style: AppTextStyles.headline),
+                Text('Pengaturan', style: textTheme.headlineLarge),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Atur perilaku optimizer sesuai gaya berkendara Anda.',
-                  style: AppTextStyles.body,
+                  style: textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 24),
 
                 // -------------------- Izin --------------------
-                _buildSectionTitle('Izin'),
+                _buildSectionTitle('Izin', textTheme),
                 const SizedBox(height: 8),
                 Card(
-                  color: AppColors.card,
+                  color: cardColor,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
                     leading: const Icon(Icons.location_on,
                         color: AppColors.accentGreen),
-                    title: const Text('Izin Lokasi',
-                        style: TextStyle(color: AppColors.textPrimary)),
-                    subtitle: const Text(
+                    title: Text('Izin Lokasi',
+                        style: textTheme.bodyLarge),
+                    subtitle: Text(
                         'Butuh akses lokasi untuk memulai pemantauan.',
-                        style: AppTextStyles.body),
+                        style: textTheme.bodySmall),
                     trailing: const Icon(Icons.chevron_right,
                         color: AppColors.textSecondary),
                     onTap: () {
@@ -51,38 +54,38 @@ class PengaturanPage extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // -------------------- Interval Heartbeat --------------------
-                _buildSectionTitle('Interval Heartbeat'),
+                _buildSectionTitle('Interval Heartbeat', textTheme),
                 const SizedBox(height: 4),
-                const Text('Frekuensi pengecekan koneksi internet.',
-                    style: AppTextStyles.body),
+                Text('Frekuensi pengecekan koneksi internet.',
+                    style: textTheme.bodySmall),
                 const SizedBox(height: 8),
                 _buildIntervalSelector(provider),
                 const SizedBox(height: 24),
 
                 // -------------------- Akurasi GPS --------------------
-                _buildSectionTitle('Akurasi GPS'),
+                _buildSectionTitle('Akurasi GPS', textTheme),
                 const SizedBox(height: 4),
-                const Text('Pilih keseimbangan akurasi & baterai.',
-                    style: AppTextStyles.body),
+                Text('Pilih keseimbangan akurasi & baterai.',
+                    style: textTheme.bodySmall),
                 const SizedBox(height: 8),
-                _buildGpsAccuracySelector(provider),
+                _buildGpsAccuracySelector(provider, textTheme, cardColor),
                 const SizedBox(height: 24),
 
                 // -------------------- Perilaku --------------------
-                _buildSectionTitle('Perilaku'),
+                _buildSectionTitle('Perilaku', textTheme),
                 const SizedBox(height: 8),
                 Card(
-                  color: AppColors.card,
+                  color: cardColor,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
                       SwitchListTile(
-                        title: const Text('Layar tetap menyala',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                        subtitle: const Text(
+                        title: Text('Layar tetap menyala',
+                            style: textTheme.bodyLarge),
+                        subtitle: Text(
                             'Cegah perangkat tidur saat optimizer berjalan.',
-                            style: AppTextStyles.body),
+                            style: textTheme.bodySmall),
                         value: provider.keepScreenOn,
                         onChanged: (val) => provider.setKeepScreenOn(val),
                         thumbColor: WidgetStateProperty.resolveWith((states) =>
@@ -91,11 +94,11 @@ class PengaturanPage extends StatelessWidget {
                                 : null),
                       ),
                       SwitchListTile(
-                        title: const Text('Auto-reconnect',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                        subtitle: const Text(
+                        title: Text('Auto-reconnect',
+                            style: textTheme.bodyLarge),
+                        subtitle: Text(
                             'Coba pulihkan koneksi otomatis saat terputus.',
-                            style: AppTextStyles.body),
+                            style: textTheme.bodySmall),
                         value: provider.autoReconnect,
                         onChanged: (val) => provider.setAutoReconnect(val),
                         thumbColor: WidgetStateProperty.resolveWith((states) =>
@@ -104,11 +107,11 @@ class PengaturanPage extends StatelessWidget {
                                 : null),
                       ),
                       SwitchListTile(
-                        title: const Text('Notifikasi drop sinyal',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                        subtitle: const Text(
+                        title: Text('Notifikasi drop sinyal',
+                            style: textTheme.bodyLarge),
+                        subtitle: Text(
                             'Catat setiap drop ke riwayat untuk diperiksa nanti.',
-                            style: AppTextStyles.body),
+                            style: textTheme.bodySmall),
                         value: provider.notifikasiDrop,
                         onChanged: (val) => provider.setNotifikasiDrop(val),
                         thumbColor: WidgetStateProperty.resolveWith((states) =>
@@ -117,11 +120,11 @@ class PengaturanPage extends StatelessWidget {
                                 : null),
                       ),
                       SwitchListTile(
-                        title: const Text('Mode hemat baterai',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                        subtitle: const Text(
+                        title: Text('Mode hemat baterai',
+                            style: textTheme.bodyLarge),
+                        subtitle: Text(
                             'Kurangi frekuensi polling GPS untuk hemat daya.',
-                            style: AppTextStyles.body),
+                            style: textTheme.bodySmall),
                         value: provider.modeHematBaterai,
                         onChanged: (val) => provider.setModeHematBaterai(val),
                         thumbColor: WidgetStateProperty.resolveWith((states) =>
@@ -134,31 +137,61 @@ class PengaturanPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // -------------------- Tentang --------------------
-                _buildSectionTitle('Tentang'),
+                // -------------------- Tema --------------------
+                _buildSectionTitle('Tema', textTheme),
                 const SizedBox(height: 8),
                 Card(
-                  color: AppColors.card,
+                  color: cardColor,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
-                  child: const Padding(
-                    padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      RadioListTile<String>(
+                        title: Text('Gelap', style: textTheme.bodyLarge),
+                        subtitle: Text('Tema gelap (default)',
+                            style: textTheme.bodySmall),
+                        value: 'dark',
+                        groupValue: provider.themeMode,
+                        onChanged: (val) => provider.setThemeMode(val!),
+                        activeColor: AppColors.accentGreen,
+                      ),
+                      RadioListTile<String>(
+                        title: Text('Terang', style: textTheme.bodyLarge),
+                        subtitle: Text('Tema terang',
+                            style: textTheme.bodySmall),
+                        value: 'light',
+                        groupValue: provider.themeMode,
+                        onChanged: (val) => provider.setThemeMode(val!),
+                        activeColor: AppColors.accentGreen,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // -------------------- Tentang --------------------
+                _buildSectionTitle('Tentang', textTheme),
+                const SizedBox(height: 8),
+                Card(
+                  color: cardColor,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Driver Optimizer',
-                            style: TextStyle(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18)),
-                        SizedBox(height: 4),
+                            style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
                         Text(
                             'Versi 1.0.0 — Pemantau koneksi & GPS untuk pengemudi.',
-                            style: AppTextStyles.body),
-                        SizedBox(height: 12),
+                            style: textTheme.bodySmall),
+                        const SizedBox(height: 12),
                         Text(
-                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara.',
-                          style: AppTextStyles.body,
+                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara. ©M.P.V. Cloud CIS & ferry pey',
+                          style: textTheme.bodySmall,
                         ),
                       ],
                     ),
@@ -173,12 +206,10 @@ class PengaturanPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, TextTheme textTheme) {
     return Text(title,
-        style: const TextStyle(
-            color: AppColors.accentGreen,
-            fontWeight: FontWeight.bold,
-            fontSize: 16));
+        style: textTheme.titleMedium?.copyWith(
+            color: AppColors.accentGreen, fontWeight: FontWeight.bold));
   }
 
   Widget _buildIntervalSelector(OptimizerProvider provider) {
@@ -213,38 +244,39 @@ class PengaturanPage extends StatelessWidget {
     );
   }
 
-  Widget _buildGpsAccuracySelector(OptimizerProvider provider) {
+  Widget _buildGpsAccuracySelector(
+      OptimizerProvider provider, TextTheme textTheme, Color cardColor) {
     return Card(
-      color: AppColors.card,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           RadioListTile<String>(
-            title: const Text('Hemat',
-                style: TextStyle(color: AppColors.textPrimary)),
-            subtitle: const Text('Hemat baterai, akurasi ±50 m',
-                style: AppTextStyles.body),
+            title: Text('Hemat', style: textTheme.bodyLarge),
+            subtitle:
+                Text('Hemat baterai, akurasi ±50 m', style: textTheme.bodySmall),
             value: 'low',
             groupValue: provider.gpsAccuracy,
             onChanged: (val) => provider.setGpsAccuracy(val!),
+            activeColor: AppColors.accentGreen,
           ),
           RadioListTile<String>(
-            title: const Text('Tinggi',
-                style: TextStyle(color: AppColors.textPrimary)),
-            subtitle: const Text('Direkomendasikan, akurasi ±10 m',
-                style: AppTextStyles.body),
+            title: Text('Tinggi', style: textTheme.bodyLarge),
+            subtitle: Text('Direkomendasikan, akurasi ±10 m',
+                style: textTheme.bodySmall),
             value: 'high',
             groupValue: provider.gpsAccuracy,
             onChanged: (val) => provider.setGpsAccuracy(val!),
+            activeColor: AppColors.accentGreen,
           ),
           RadioListTile<String>(
-            title: const Text('Maksimum',
-                style: TextStyle(color: AppColors.textPrimary)),
-            subtitle: const Text('Akurasi navigasi, boros baterai',
-                style: AppTextStyles.body),
+            title: Text('Maksimum', style: textTheme.bodyLarge),
+            subtitle: Text('Akurasi navigasi, boros baterai',
+                style: textTheme.bodySmall),
             value: 'max',
             groupValue: provider.gpsAccuracy,
             onChanged: (val) => provider.setGpsAccuracy(val!),
+            activeColor: AppColors.accentGreen,
           ),
         ],
       ),
