@@ -13,6 +13,9 @@ import '../models/log_entry.dart';
 import '../services/optimizer_service.dart';
 
 class OptimizerProvider extends ChangeNotifier {
+  // -------------------------------------------------------------
+  // State dasar
+  // -------------------------------------------------------------
   bool _isActive = false;
   bool get isActive => _isActive;
 
@@ -43,22 +46,48 @@ class OptimizerProvider extends ChangeNotifier {
   final List<LogEntry> _logs = [];
   List<LogEntry> get logs => _logs;
 
+  // -------------------------------------------------------------
+  // Pengaturan lama
+  // -------------------------------------------------------------
   int _intervalSeconds = 5;
   int get intervalSeconds => _intervalSeconds;
   bool _notificationEnabled = true;
   bool get notificationEnabled => _notificationEnabled;
 
+  // -------------------------------------------------------------
+  // Pengaturan baru (sesuai tangkapan layar)
+  // -------------------------------------------------------------
+  String _gpsAccuracy = 'high';   // 'low', 'high', 'max'
+  String get gpsAccuracy => _gpsAccuracy;
+
+  bool _keepScreenOn = true;
+  bool get keepScreenOn => _keepScreenOn;
+
+  bool _autoReconnect = true;
+  bool get autoReconnect => _autoReconnect;
+
+  bool _modeHematBaterai = false;
+  bool get modeHematBaterai => _modeHematBaterai;
+
+  bool _notifikasiDrop = true;
+  bool get notifikasiDrop => _notifikasiDrop;
+
+  // -------------------------------------------------------------
+  // Dialog peringatan
+  // -------------------------------------------------------------
   bool _showDropDialog = false;
   bool get showDropDialog => _showDropDialog;
   String _dropType = '';
   String get dropType => _dropType;
 
-  Timer? _sessionTimer; // untuk durasi
-  Timer? _pollTimer;    // untuk pengecekan real‑time oleh UI
+  Timer? _sessionTimer;
+  Timer? _pollTimer;
   Timer? _batteryTimer;
 
   final Battery _battery = Battery();
 
+  // -------------------------------------------------------------
+  // Inisialisasi & penyimpanan pengaturan
   // -------------------------------------------------------------
   Future<void> initialize() async {
     await _loadSettings();
@@ -66,7 +95,6 @@ class OptimizerProvider extends ChangeNotifier {
     _totalOptimizerSeconds =
         (await SharedPreferences.getInstance()).getInt('totalOptimizerSeconds') ?? 0;
 
-    // Cek apakah service sedang berjalan (aplikasi dibuka ulang)
     if (await FlutterForegroundTask.isRunningService) {
       final prefs = await SharedPreferences.getInstance();
       final startTimestamp = prefs.getInt('sessionStartTimestamp');
@@ -75,18 +103,89 @@ class OptimizerProvider extends ChangeNotifier {
         final now = DateTime.now().millisecondsSinceEpoch;
         _elapsedSeconds = ((now - startTimestamp) / 1000).round().clamp(0, 99999);
         _startSessionTimer();
-        _startPolling();   // mulai pengecekan UI
+        _startPolling();
         _startBatteryMonitor();
         notifyListeners();
       }
     }
   }
 
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _intervalSeconds = prefs.getInt('interval') ?? 5;
+    _notificationEnabled = prefs.getBool('notificationEnabled') ?? true;
+    _gpsAccuracy = prefs.getString('gpsAccuracy') ?? 'high';
+    _keepScreenOn = prefs.getBool('keepScreenOn') ?? true;
+    _autoReconnect = prefs.getBool('autoReconnect') ?? true;
+    _modeHematBaterai = prefs.getBool('modeHematBaterai') ?? false;
+    _notifikasiDrop = prefs.getBool('notifikasiDrop') ?? true;
+  }
+
+  Future<void> _saveSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('interval', _intervalSeconds);
+    await prefs.setBool('notificationEnabled', _notificationEnabled);
+    await prefs.setString('gpsAccuracy', _gpsAccuracy);
+    await prefs.setBool('keepScreenOn', _keepScreenOn);
+    await prefs.setBool('autoReconnect', _autoReconnect);
+    await prefs.setBool('modeHematBaterai', _modeHematBaterai);
+    await prefs.setBool('notifikasiDrop', _notifikasiDrop);
+  }
+
+  // -------------------------------------------------------------
+  // Setter pengaturan baru
+  // -------------------------------------------------------------
+  Future<void> setInterval(int seconds) async {
+    _intervalSeconds = seconds;
+    await _saveSettings();
+    if (_isActive) {
+      FlutterForegroundTask.sendDataToTask({'interval': seconds});
+    }
+    notifyListeners();
+  }
+
+  Future<void> setNotificationEnabled(bool value) async {
+    _notificationEnabled = value;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setGpsAccuracy(String value) async {
+    _gpsAccuracy = value;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setKeepScreenOn(bool value) async {
+    _keepScreenOn = value;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setAutoReconnect(bool value) async {
+    _autoReconnect = value;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setModeHematBaterai(bool value) async {
+    _modeHematBaterai = value;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> setNotifikasiDrop(bool value) async {
+    _notifikasiDrop = value;
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Kontrol optimizer (start / stop)
   // -------------------------------------------------------------
   Future<void> startOptimizer() async {
     if (_isActive) return;
 
-    // Izin lokasi
     final permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       if (await Geolocator.requestPermission() == LocationPermission.denied) {
@@ -100,12 +199,10 @@ class OptimizerProvider extends ChangeNotifier {
       throw Exception('GPS belum aktif');
     }
 
-    // Simpan waktu mulai
     final prefs = await SharedPreferences.getInstance();
     final startTimestamp = DateTime.now().millisecondsSinceEpoch;
     await prefs.setInt('sessionStartTimestamp', startTimestamp);
 
-    // Mulai foreground service
     await FlutterForegroundTask.startService(
       notificationTitle: 'Driver Optimizer',
       notificationText: 'Optimizer dimulai...',
@@ -115,10 +212,8 @@ class OptimizerProvider extends ChangeNotifier {
       callback: optimizerServiceTask,
     );
 
-    // Kirim interval ke service
     FlutterForegroundTask.sendDataToTask({'interval': _intervalSeconds});
 
-    // Atur state aktif
     _isActive = true;
     _elapsedSeconds = 0;
     _heartbeatCount = 0;
@@ -135,7 +230,6 @@ class OptimizerProvider extends ChangeNotifier {
 
   Future<void> stopOptimizer() async {
     if (!_isActive) return;
-
     await FlutterForegroundTask.stopService();
     _sessionTimer?.cancel();
     _pollTimer?.cancel();
@@ -153,6 +247,8 @@ class OptimizerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // -------------------------------------------------------------
+  // Timer internal
   // -------------------------------------------------------------
   void _startSessionTimer() {
     _sessionTimer?.cancel();
@@ -173,11 +269,9 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   Future<void> _performPoll() async {
-    // Cek koneksi & GPS dari main isolate
     final conn = await _checkConnectionDirect();
     final gps = await _checkGpsDirect();
 
-    // Deteksi perubahan
     if (_connectionStatus.isConnected != conn.isConnected) {
       if (conn.isConnected) {
         _addLog('Internet pulih', 'normal');
@@ -241,7 +335,6 @@ class OptimizerProvider extends ChangeNotifier {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 3),
-  
       );
       return GpsStatus(
         isFixed: true,
@@ -257,6 +350,8 @@ class OptimizerProvider extends ChangeNotifier {
     }
   }
 
+  // -------------------------------------------------------------
+  // Log
   // -------------------------------------------------------------
   void _addLog(String eventType, String status) {
     _logs.insert(
@@ -283,6 +378,8 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
+  // Pengecekan manual
+  // -------------------------------------------------------------
   Future<Map<String, String>> manualCheck() async {
     final conn = await _checkConnectionDirect();
     final gps = await _checkGpsDirect();
@@ -295,28 +392,25 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  Future<void> setInterval(int seconds) async {
-    _intervalSeconds = seconds;
-    await (await SharedPreferences.getInstance()).setInt('interval', seconds);
-    if (_isActive) {
-      FlutterForegroundTask.sendDataToTask({'interval': seconds});
-    }
-    notifyListeners();
+  // Baterai
+  // -------------------------------------------------------------
+  void _startBatteryMonitor() {
+    _batteryTimer?.cancel();
+    _batteryTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      try {
+        _batteryLevel = await _battery.batteryLevel;
+        notifyListeners();
+      } catch (_) {}
+    });
+    _battery.batteryLevel.then((level) {
+      _batteryLevel = level;
+      notifyListeners();
+    });
   }
 
-  Future<void> setNotificationEnabled(bool value) async {
-    _notificationEnabled = value;
-    await (await SharedPreferences.getInstance())
-        .setBool('notificationEnabled', value);
-    notifyListeners();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    _intervalSeconds = prefs.getInt('interval') ?? 5;
-    _notificationEnabled = prefs.getBool('notificationEnabled') ?? true;
-  }
-
+  // -------------------------------------------------------------
+  // Penyimpanan log
+  // -------------------------------------------------------------
   Future<void> _saveLogs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -332,20 +426,6 @@ class OptimizerProvider extends ChangeNotifier {
       _logs.addAll(
           decoded.map((e) => LogEntry.fromJson(Map<String, dynamic>.from(e))));
     }
-  }
-
-  void _startBatteryMonitor() {
-    _batteryTimer?.cancel();
-    _batteryTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-      try {
-        _batteryLevel = await _battery.batteryLevel;
-        notifyListeners();
-      } catch (_) {}
-    });
-    _battery.batteryLevel.then((level) {
-      _batteryLevel = level;
-      notifyListeners();
-    });
   }
 
   @override
