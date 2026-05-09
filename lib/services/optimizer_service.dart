@@ -1,48 +1,77 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
-
 import '../models/connection_status.dart';
 import '../models/gps_status.dart';
 
-/// ENTRY POINT (WAJIB TOP LEVEL)
 @pragma('vm:entry-point')
 void optimizerServiceTask() {
-  FlutterForegroundTask.setTaskHandler(
-    OptimizerTaskHandler(),
-  );
+  FlutterForegroundTask.setTaskHandler(OptimizerTaskHandler());
 }
 
 class OptimizerTaskHandler extends TaskHandler {
+  // ← hapus constructor dengan super.key, TaskHandler tidak punya key
   Timer? _monitorTimer;
   final Connectivity _connectivity = Connectivity();
 
-  OptimizerTaskHandler();
+  int _intervalSeconds = 5;
+  String _gpsAccuracy = 'high';
+  bool _modeHematBaterai = false;
 
   @override
   void onStart(DateTime timestamp) {
+    // ← void bukan Future<void>, hapus TaskStarter
     _initAndStart();
   }
 
   Future<void> _initAndStart() async {
-    final interval =
+    _intervalSeconds =
         await FlutterForegroundTask.getData<int>(key: 'interval') ?? 5;
-    _startMonitoring(interval);
+    _gpsAccuracy =
+        await FlutterForegroundTask.getData<String>(key: 'gpsAccuracy') ?? 'high';
+    _modeHematBaterai =
+        await FlutterForegroundTask.getData<bool>(key: 'hematBaterai') ?? false;
+
+    _startPeriodicCheck();
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    // tidak dipakai
+    // tidak digunakan
   }
 
-  void _startMonitoring(int seconds) {
+  @override
+  void onReceiveData(Object data) {
+    if (data is Map) {
+      bool restartTimer = false;
+      if (data.containsKey('interval')) {
+        _intervalSeconds = data['interval'] as int;
+        restartTimer = true;
+      }
+      if (data.containsKey('gpsAccuracy')) {
+        _gpsAccuracy = data['gpsAccuracy'] as String;
+      }
+      if (data.containsKey('hematBaterai')) {
+        _modeHematBaterai = data['hematBaterai'] as bool;
+        restartTimer = true;
+      }
+      if (restartTimer) {
+        _startPeriodicCheck();
+      }
+    }
+  }
+
+  void _startPeriodicCheck() {
     _monitorTimer?.cancel();
 
+    final effectiveInterval = _modeHematBaterai
+        ? (_intervalSeconds * 2).clamp(5, 300)
+        : _intervalSeconds;
+
     _monitorTimer = Timer.periodic(
-      Duration(seconds: seconds),
+      Duration(seconds: effectiveInterval),
       (_) async {
         final conn = await _checkConnection();
         final gps = await _checkGps();
@@ -59,9 +88,7 @@ class OptimizerTaskHandler extends TaskHandler {
 
   Future<ConnectionStatus> _checkConnection() async {
     final results = await _connectivity.checkConnectivity();
-
     String type = 'none';
-
     if (results.contains(ConnectivityResult.wifi)) {
       type = 'wifi';
     } else if (results.contains(ConnectivityResult.mobile)) {
@@ -70,16 +97,11 @@ class OptimizerTaskHandler extends TaskHandler {
 
     bool reachable = false;
     int latency = 0;
-
     try {
       final sw = Stopwatch()..start();
-
       final lookup = await InternetAddress.lookup('8.8.8.8')
           .timeout(const Duration(seconds: 2));
-
-      reachable =
-          lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty;
-
+      reachable = lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty;
       sw.stop();
       latency = sw.elapsedMilliseconds;
     } catch (_) {}
@@ -97,20 +119,31 @@ class OptimizerTaskHandler extends TaskHandler {
       return GpsStatus.empty();
     }
 
+    LocationAccuracy accuracy;
+    switch (_gpsAccuracy) {
+      case 'low':
+        accuracy = LocationAccuracy.low;
+        break;
+      case 'max':
+        accuracy = LocationAccuracy.best;
+        break;
+      default:
+        accuracy = LocationAccuracy.high;
+    }
+
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: accuracy,
         timeLimit: const Duration(seconds: 3),
       );
-
       return GpsStatus(
         isFixed: true,
-        latitude: pos.latitude,
-        longitude: pos.longitude,
-        accuracy: pos.accuracy,
-        speed: pos.speed,
-        bearing: pos.heading,
-        altitude: pos.altitude,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
+        speed: position.speed,
+        bearing: position.heading,
+        altitude: position.altitude,
       );
     } catch (_) {
       return GpsStatus.empty();
@@ -118,16 +151,11 @@ class OptimizerTaskHandler extends TaskHandler {
   }
 
   Future<void> _updateNotification(
-    ConnectionStatus conn,
-    GpsStatus gps,
-  ) async {
-    final connText =
-        'Internet: ${conn.stabilityText} (${conn.typeText})';
-
+      ConnectionStatus conn, GpsStatus gps) async {
+    final connText = 'Internet: ${conn.stabilityText} (${conn.typeText})';
     final gpsText = gps.isFixed
         ? ' | GPS: Terkunci (${gps.accuracyText})'
         : ' | GPS: Tidak Terkunci';
-
     await FlutterForegroundTask.updateService(
       notificationTitle: 'Driver Optimizer Aktif',
       notificationText: '$connText$gpsText',
@@ -143,8 +171,9 @@ class OptimizerTaskHandler extends TaskHandler {
   void onNotificationPressed() {}
 
   @override
-  void onNotificationButtonPressed(String id) {}
-
-  @override
-  void onReceiveData(Object data) {}
+  void onNotificationButtonPressed(String id) {
+    if (id == 'stop') {
+      FlutterForegroundTask.stopService();
+    }
+  }
 }

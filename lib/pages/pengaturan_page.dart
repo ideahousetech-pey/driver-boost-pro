@@ -85,7 +85,6 @@ class PengaturanPage extends StatelessWidget {
                             style: AppTextStyles.body),
                         value: provider.keepScreenOn,
                         onChanged: (val) => provider.setKeepScreenOn(val),
-                        // Hanya thumbColor, tanpa activeColor
                         thumbColor: WidgetStateProperty.resolveWith((states) =>
                             states.contains(WidgetState.selected)
                                 ? AppColors.accentGreen
@@ -158,7 +157,7 @@ class PengaturanPage extends StatelessWidget {
                             style: AppTextStyles.body),
                         SizedBox(height: 12),
                         Text(
-                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara. ©M.P.V. Cloud CIS & ferry pey',
+                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara.',
                           style: AppTextStyles.body,
                         ),
                       ],

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/connection_status.dart';
 import '../models/gps_status.dart';
 import '../models/log_entry.dart';
@@ -55,7 +56,7 @@ class OptimizerProvider extends ChangeNotifier {
   bool get notificationEnabled => _notificationEnabled;
 
   // -------------------------------------------------------------
-  // Pengaturan baru (sesuai tangkapan layar)
+  // Pengaturan baru
   // -------------------------------------------------------------
   String _gpsAccuracy = 'high';   // 'low', 'high', 'max'
   String get gpsAccuracy => _gpsAccuracy;
@@ -102,6 +103,7 @@ class OptimizerProvider extends ChangeNotifier {
         _isActive = true;
         final now = DateTime.now().millisecondsSinceEpoch;
         _elapsedSeconds = ((now - startTimestamp) / 1000).round().clamp(0, 99999);
+        _applyKeepScreenOn();
         _startSessionTimer();
         _startPolling();
         _startBatteryMonitor();
@@ -133,13 +135,13 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // Setter pengaturan baru
+  // Setter pengaturan baru (dengan efek langsung)
   // -------------------------------------------------------------
   Future<void> setInterval(int seconds) async {
     _intervalSeconds = seconds;
     await _saveSettings();
     if (_isActive) {
-      FlutterForegroundTask.sendDataToTask({'interval': seconds});
+      _sendSettingsToService();
     }
     notifyListeners();
   }
@@ -153,12 +155,16 @@ class OptimizerProvider extends ChangeNotifier {
   Future<void> setGpsAccuracy(String value) async {
     _gpsAccuracy = value;
     await _saveSettings();
+    // Tidak perlu kirim ke service, karena polling UI yang terpengaruh
     notifyListeners();
   }
 
   Future<void> setKeepScreenOn(bool value) async {
     _keepScreenOn = value;
     await _saveSettings();
+    if (_isActive) {
+      _applyKeepScreenOn();
+    }
     notifyListeners();
   }
 
@@ -171,6 +177,9 @@ class OptimizerProvider extends ChangeNotifier {
   Future<void> setModeHematBaterai(bool value) async {
     _modeHematBaterai = value;
     await _saveSettings();
+    if (_isActive) {
+      _sendSettingsToService(); // bisa ubah interval di service
+    }
     notifyListeners();
   }
 
@@ -212,7 +221,7 @@ class OptimizerProvider extends ChangeNotifier {
       callback: optimizerServiceTask,
     );
 
-    FlutterForegroundTask.sendDataToTask({'interval': _intervalSeconds});
+    _sendSettingsToService();
 
     _isActive = true;
     _elapsedSeconds = 0;
@@ -222,6 +231,7 @@ class OptimizerProvider extends ChangeNotifier {
     _dronGpsCount = 0;
     _sessionDurationSecs = 0;
 
+    _applyKeepScreenOn();   // aktifkan wakelock jika disetel
     _startSessionTimer();
     _startPolling();
     _startBatteryMonitor();
@@ -244,7 +254,35 @@ class OptimizerProvider extends ChangeNotifier {
     _connectionStatus = ConnectionStatus.empty();
     _gpsStatus = GpsStatus.empty();
     _elapsedSeconds = 0;
+
+    _releaseKeepScreenOn(); // lepas wakelock
     notifyListeners();
+  }
+
+  // -------------------------------------------------------------
+  // Wakelock (layar tetap menyala)
+  // -------------------------------------------------------------
+  void _applyKeepScreenOn() {
+    if (_keepScreenOn) {
+      WakelockPlus.enable();
+    } else {
+      WakelockPlus.disable();
+    }
+  }
+
+  void _releaseKeepScreenOn() {
+    WakelockPlus.disable();
+  }
+
+  // -------------------------------------------------------------
+  // Kirim pengaturan ke foreground service
+  // -------------------------------------------------------------
+  void _sendSettingsToService() {
+    FlutterForegroundTask.sendDataToTask({
+      'interval': _intervalSeconds,
+      'gpsAccuracy': _gpsAccuracy,
+      'hematBaterai': _modeHematBaterai,
+    });
   }
 
   // -------------------------------------------------------------
@@ -331,9 +369,26 @@ class OptimizerProvider extends ChangeNotifier {
     if (!await Geolocator.isLocationServiceEnabled()) {
       return GpsStatus.empty();
     }
+
+    // Tentukan akurasi berdasarkan pengaturan
+    LocationAccuracy accuracy;
+    switch (_gpsAccuracy) {
+      case 'low':
+        accuracy = LocationAccuracy.low;   // ±500m
+        break;
+      case 'high':
+        accuracy = LocationAccuracy.high; // ±10m
+        break;
+      case 'max':
+        accuracy = LocationAccuracy.best;  // navigasi
+        break;
+      default:
+        accuracy = LocationAccuracy.high;
+    }
+
     try {
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy: accuracy,
         timeLimit: const Duration(seconds: 3),
       );
       return GpsStatus(
@@ -433,6 +488,7 @@ class OptimizerProvider extends ChangeNotifier {
     _sessionTimer?.cancel();
     _pollTimer?.cancel();
     _batteryTimer?.cancel();
+    _releaseKeepScreenOn();
     super.dispose();
   }
 }
