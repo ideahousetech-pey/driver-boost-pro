@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../utils/constants.dart';
 
 class DetailConnection extends StatelessWidget {
   final String latency;
@@ -15,8 +14,11 @@ class DetailConnection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accentGreen = theme.primaryColor;
+
     return Card(
-      color: AppColors.card,
+      color: theme.cardColor,
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
@@ -27,12 +29,11 @@ class DetailConnection extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Detail Koneksi', style: AppTextStyles.headline),
+                Text('Detail Koneksi', style: theme.textTheme.titleMedium),
                 TextButton.icon(
                   onPressed: onCheck,
-                  icon: const Icon(Icons.refresh, color: AppColors.accentGreen),
-                  label: const Text('Cek sekarang',
-                      style: TextStyle(color: AppColors.accentGreen)),
+                  icon: Icon(Icons.refresh, color: accentGreen),
+                  label: Text('Cek sekarang', style: TextStyle(color: accentGreen)),
                 ),
               ],
             ),
@@ -41,11 +42,14 @@ class DetailConnection extends StatelessWidget {
               children: [
                 Expanded(
                     child: _MetricTile(
-                        label: 'Latensi', value: latency.isEmpty ? 'Belum ada' : latency)),
+                        label: 'Latensi',
+                        value: latency.isEmpty ? 'Belum ada' : latency,
+                        theme: theme)),
                 Expanded(
                     child: _MetricTile(
                         label: 'Jangkau internet',
-                        value: reachable.isEmpty ? 'Belum ada' : reachable)),
+                        value: reachable.isEmpty ? 'Belum ada' : reachable,
+                        theme: theme)),
               ],
             ),
           ],
@@ -58,16 +62,17 @@ class DetailConnection extends StatelessWidget {
 class _MetricTile extends StatelessWidget {
   final String label;
   final String value;
-  const _MetricTile({required this.label, required this.value});
+  final ThemeData theme;
+  const _MetricTile({required this.label, required this.value, required this.theme});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.metricLabel),
+        Text(label, style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.2)),
         const SizedBox(height: 4),
-        Text(value, style: AppTextStyles.metricValue.copyWith(fontSize: 16)),
+        Text(value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
       ],
     );
   }

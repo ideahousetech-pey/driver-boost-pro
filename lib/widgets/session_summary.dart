@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../utils/constants.dart';
 
 class SessionSummary extends StatelessWidget {
   final int totalDisplaySeconds;
@@ -25,8 +24,11 @@ class SessionSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accentGreen = theme.primaryColor;
+
     return Card(
-      color: AppColors.card,
+      color: theme.cardColor,
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
@@ -34,27 +36,27 @@ class SessionSummary extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Sesi Saat Ini', style: AppTextStyles.headline),
+            Text('Sesi Saat Ini', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             if (!isActive)
-              const Text('Mulai sesi optimizer untuk perjalanan ini',
-                  style: AppTextStyles.body)
+              Text('Mulai sesi optimizer untuk perjalanan ini',
+                  style: theme.textTheme.bodySmall)
             else ...[
               Center(
                 child: Text('${totalDisplaySeconds}d',
-                    style: AppTextStyles.metricValue.copyWith(fontSize: 32)),
+                    style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 12,
                 runSpacing: 4,
                 children: [
-                  _StatChip(label: 'Durasi', value: '${sessionDuration}s'),
-                  _StatChip(label: 'Heartbeat', value: '$heartbeats'),
-                  _StatChip(label: 'Fix GPS', value: '$fixGps'),
-                  _StatChip(label: 'Drop net', value: '$dropNet'),
-                  _StatChip(label: 'Dron GPS', value: '$dronGps'),
-                  _StatChip(label: 'Baterai', value: '$batteryLevel%'),
+                  _StatChip(label: 'Durasi', value: '${sessionDuration}s', accent: accentGreen),
+                  _StatChip(label: 'Heartbeat', value: '$heartbeats', accent: accentGreen),
+                  _StatChip(label: 'Fix GPS', value: '$fixGps', accent: accentGreen),
+                  _StatChip(label: 'Drop net', value: '$dropNet', accent: accentGreen),
+                  _StatChip(label: 'Dron GPS', value: '$dronGps', accent: accentGreen),
+                  _StatChip(label: 'Baterai', value: '$batteryLevel%', accent: accentGreen),
                 ],
               ),
             ],
@@ -68,14 +70,14 @@ class SessionSummary extends StatelessWidget {
 class _StatChip extends StatelessWidget {
   final String label;
   final String value;
-  const _StatChip({required this.label, required this.value});
+  final Color accent;
+  const _StatChip({required this.label, required this.value, required this.accent});
 
   @override
   Widget build(BuildContext context) {
     return Chip(
-      backgroundColor: AppColors.accentGreen.withAlpha((0.1 * 255).round()),
-      label: Text('$label: $value',
-          style: const TextStyle(color: AppColors.accentGreen, fontSize: 13)),
+      backgroundColor: accent.withValues(alpha: 0.1),
+      label: Text('$label: $value', style: TextStyle(color: accent, fontSize: 13)),
     );
   }
 }

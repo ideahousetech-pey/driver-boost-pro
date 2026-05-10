@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/optimizer_provider.dart';
-import '../utils/constants.dart';
 
 class RiwayatPage extends StatefulWidget {
   const RiwayatPage({super.key});
@@ -16,6 +15,10 @@ class _RiwayatPageState extends State<RiwayatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final accentGreen = theme.primaryColor;
+
     return Consumer<OptimizerProvider>(
       builder: (context, provider, _) {
         final logs = provider.logs.where((log) {
@@ -25,7 +28,7 @@ class _RiwayatPageState extends State<RiwayatPage> {
         }).toList();
 
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: theme.scaffoldBackgroundColor,
           body: SafeArea(
             child: Column(
               children: [
@@ -34,7 +37,7 @@ class _RiwayatPageState extends State<RiwayatPage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Riwayat Kejadian', style: AppTextStyles.headline),
+                      Text('Riwayat Kejadian', style: textTheme.headlineLarge),
                       TextButton.icon(
                         onPressed: () async {
                           final picked = await showDatePicker(
@@ -43,11 +46,10 @@ class _RiwayatPageState extends State<RiwayatPage> {
                             firstDate: DateTime(2020),
                             lastDate: DateTime.now(),
                             builder: (context, child) => Theme(
-                              data: ThemeData.dark().copyWith(
-                                colorScheme: const ColorScheme.dark(
-                                  primary: AppColors.accentGreen,
-                                  onPrimary: Colors.black,
-                                  surface: AppColors.card,
+                              data: Theme.of(context).copyWith(
+                                colorScheme: ColorScheme.fromSeed(
+                                  seedColor: accentGreen,
+                                  brightness: Theme.of(context).brightness,
                                 ),
                               ),
                               child: child!,
@@ -55,12 +57,12 @@ class _RiwayatPageState extends State<RiwayatPage> {
                           );
                           if (picked != null) setState(() => _filterDate = picked);
                         },
-                        icon: const Icon(Icons.filter_list, color: AppColors.accentGreen),
+                        icon: Icon(Icons.filter_list, color: accentGreen),
                         label: Text(
                           _filterDate == null
                               ? 'Filter'
                               : DateFormat('dd/MM').format(_filterDate!),
-                          style: const TextStyle(color: AppColors.accentGreen),
+                          style: TextStyle(color: accentGreen),
                         ),
                       ),
                     ],
@@ -68,8 +70,8 @@ class _RiwayatPageState extends State<RiwayatPage> {
                 ),
                 Expanded(
                   child: logs.isEmpty
-                      ? const Center(
-                          child: Text('Belum ada riwayat.', style: AppTextStyles.body))
+                      ? Center(
+                          child: Text('Belum ada riwayat.', style: textTheme.bodyMedium))
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: logs.length,
@@ -77,23 +79,21 @@ class _RiwayatPageState extends State<RiwayatPage> {
                             final log = logs[index];
                             final isDrop = log.status == 'drop';
                             return Card(
-                              color: AppColors.card,
+                              color: theme.cardColor,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                               child: ListTile(
                                 leading: Icon(
                                   isDrop ? Icons.error : Icons.check_circle,
-                                  color: isDrop ? AppColors.accentRed : AppColors.accentGreen,
+                                  color: isDrop ? Colors.redAccent : accentGreen,
                                 ),
                                 title: Text(log.eventType,
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: isDrop
-                                            ? AppColors.accentRed
-                                            : AppColors.accentGreen)),
+                                        color: isDrop ? Colors.redAccent : accentGreen)),
                                 subtitle: Text(
                                   DateFormat('dd/MM/yyyy HH:mm:ss').format(log.timestamp),
-                                  style: AppTextStyles.body,
+                                  style: textTheme.bodySmall,
                                 ),
                               ),
                             );

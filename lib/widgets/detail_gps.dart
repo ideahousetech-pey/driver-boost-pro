@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../utils/constants.dart';
 
 class DetailGps extends StatelessWidget {
   final String latitude;
@@ -23,8 +22,10 @@ class DetailGps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Card(
-      color: AppColors.card,
+      color: theme.cardColor,
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
@@ -32,16 +33,18 @@ class DetailGps extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Detail GPS', style: AppTextStyles.headline),
+            Text('Detail GPS', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             if (!isFixed)
-              const Center(
+              Center(
                 child: Column(
                   children: [
-                    Text('Menunggu fix GPS', style: AppTextStyles.metricValue),
-                    SizedBox(height: 8),
-                    Text('Mulai optimizer untuk mengaktifkan pemantauan GPS terus-menerus.',
-                        style: AppTextStyles.body, textAlign: TextAlign.center),
+                    Text('Menunggu fix GPS', style: theme.textTheme.bodyLarge),
+                    const SizedBox(height: 8),
+                    Text(
+                        'Mulai optimizer untuk mengaktifkan pemantauan GPS terus-menerus.',
+                        style: theme.textTheme.bodySmall,
+                        textAlign: TextAlign.center),
                   ],
                 ),
               )
@@ -50,11 +53,11 @@ class DetailGps extends StatelessWidget {
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  _GpsItem(label: 'Koordinat', value: '$latitude, $longitude'),
-                  _GpsItem(label: 'Akurasi', value: accuracy),
-                  _GpsItem(label: 'Kecepatan', value: speed),
-                  _GpsItem(label: 'Arah', value: bearing),
-                  _GpsItem(label: 'Ketinggian', value: altitude),
+                  _GpsItem(label: 'Koordinat', value: '$latitude, $longitude', theme: theme),
+                  _GpsItem(label: 'Akurasi', value: accuracy, theme: theme),
+                  _GpsItem(label: 'Kecepatan', value: speed, theme: theme),
+                  _GpsItem(label: 'Arah', value: bearing, theme: theme),
+                  _GpsItem(label: 'Ketinggian', value: altitude, theme: theme),
                 ],
               ),
           ],
@@ -67,7 +70,8 @@ class DetailGps extends StatelessWidget {
 class _GpsItem extends StatelessWidget {
   final String label;
   final String value;
-  const _GpsItem({required this.label, required this.value});
+  final ThemeData theme;
+  const _GpsItem({required this.label, required this.value, required this.theme});
 
   @override
   Widget build(BuildContext context) {
@@ -76,8 +80,8 @@ class _GpsItem extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTextStyles.metricLabel),
-          Text(value, style: AppTextStyles.metricValue.copyWith(fontSize: 16)),
+          Text(label, style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.2)),
+          Text(value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
         ],
       ),
     );

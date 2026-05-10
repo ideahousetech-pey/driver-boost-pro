@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../utils/constants.dart';
 
 class MetricCard extends StatelessWidget {
   final IconData icon;
@@ -17,8 +16,11 @@ class MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accentGreen = theme.primaryColor;
+
     return Card(
-      color: AppColors.card,
+      color: theme.cardColor,
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
@@ -26,13 +28,13 @@ class MetricCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 32, color: AppColors.accentGreen),
+            Icon(icon, size: 32, color: accentGreen),
             const SizedBox(height: 8),
-            Text(label, style: AppTextStyles.metricLabel),
+            Text(label, style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.2)),
             if (value != null)
-              Text(value!, style: AppTextStyles.metricValue),
+              Text(value!, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             if (subtitle != null)
-              Text(subtitle!, style: AppTextStyles.body, textAlign: TextAlign.center),
+              Text(subtitle!, style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
           ],
         ),
       ),

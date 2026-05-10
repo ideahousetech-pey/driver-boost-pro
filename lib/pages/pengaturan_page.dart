@@ -9,13 +9,14 @@ class PengaturanPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final cardColor = Theme.of(context).cardColor;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final cardColor = theme.cardColor;
 
     return Consumer<OptimizerProvider>(
       builder: (context, provider, _) {
         return Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          backgroundColor: theme.scaffoldBackgroundColor,
           body: SafeArea(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -38,13 +39,12 @@ class PengaturanPage extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.location_on,
                         color: AppColors.accentGreen),
-                    title: Text('Izin Lokasi',
-                        style: textTheme.bodyLarge),
+                    title: Text('Izin Lokasi', style: textTheme.bodyLarge),
                     subtitle: Text(
                         'Butuh akses lokasi untuk memulai pemantauan.',
                         style: textTheme.bodySmall),
-                    trailing: const Icon(Icons.chevron_right,
-                        color: AppColors.textSecondary),
+                    trailing: Icon(Icons.chevron_right,
+                        color: textTheme.bodySmall?.color ?? Colors.grey),
                     onTap: () {
                       AppSettings.openAppSettings(
                           type: AppSettingsType.location);
@@ -157,8 +157,8 @@ class PengaturanPage extends StatelessWidget {
                       ),
                       RadioListTile<String>(
                         title: Text('Terang', style: textTheme.bodyLarge),
-                        subtitle: Text('Tema terang',
-                            style: textTheme.bodySmall),
+                        subtitle:
+                            Text('Tema terang', style: textTheme.bodySmall),
                         value: 'light',
                         groupValue: provider.themeMode,
                         onChanged: (val) => provider.setThemeMode(val!),
@@ -190,7 +190,7 @@ class PengaturanPage extends StatelessWidget {
                             style: textTheme.bodySmall),
                         const SizedBox(height: 12),
                         Text(
-                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara. ©M.P.V. Cloud CIS & ferry pey',
+                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara. © M.P.V. Cloud CIS & ferry pey',
                           style: textTheme.bodySmall,
                         ),
                       ],
@@ -232,13 +232,13 @@ class PengaturanPage extends StatelessWidget {
           if (states.contains(WidgetState.selected)) {
             return AppColors.accentGreen;
           }
-          return AppColors.card;
+          return Colors.transparent; // use default card color via parent
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return Colors.black;
           }
-          return AppColors.textPrimary;
+          return null; // default text color
         }),
       ),
     );
@@ -253,8 +253,8 @@ class PengaturanPage extends StatelessWidget {
         children: [
           RadioListTile<String>(
             title: Text('Hemat', style: textTheme.bodyLarge),
-            subtitle:
-                Text('Hemat baterai, akurasi ±50 m', style: textTheme.bodySmall),
+            subtitle: Text('Hemat baterai, akurasi ±50 m',
+                style: textTheme.bodySmall),
             value: 'low',
             groupValue: provider.gpsAccuracy,
             onChanged: (val) => provider.setGpsAccuracy(val!),

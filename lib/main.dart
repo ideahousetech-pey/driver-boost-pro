@@ -71,16 +71,16 @@ class MyApp extends StatelessWidget {
           darkTheme: ThemeData(
             brightness: Brightness.dark,
             primaryColor: AppColors.accentGreen,
-            scaffoldBackgroundColor: AppColors.background,
-            cardColor: AppColors.card,
+            scaffoldBackgroundColor: const Color(0xFF121212),
+            cardColor: const Color(0xFF1A1A2E),
             appBarTheme: const AppBarTheme(
-              backgroundColor: AppColors.background,
+              backgroundColor: Color(0xFF121212),
               elevation: 0,
             ),
             bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-              backgroundColor: AppColors.card,
+              backgroundColor: Color(0xFF1A1A2E),
               selectedItemColor: AppColors.accentGreen,
-              unselectedItemColor: AppColors.textSecondary,
+              unselectedItemColor: Colors.white70,
             ),
           ),
           // Tema terang

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_settings/app_settings.dart';
 import '../providers/optimizer_provider.dart';
-import '../utils/constants.dart';
 import '../widgets/metric_card.dart';
 import '../widgets/detail_connection.dart';
 import '../widgets/detail_gps.dart';
@@ -21,7 +20,6 @@ class _StatusPageState extends State<StatusPage> {
   @override
   void initState() {
     super.initState();
-    // Tangani dialog peringatan
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<OptimizerProvider>();
       provider.addListener(_checkDropDialog);
@@ -73,6 +71,11 @@ class _StatusPageState extends State<StatusPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final accentGreen = theme.primaryColor;
+
     return Consumer<OptimizerProvider>(
       builder: (context, provider, child) {
         final isActive = provider.isActive;
@@ -80,7 +83,7 @@ class _StatusPageState extends State<StatusPage> {
         final gps = provider.gpsStatus;
 
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: scaffoldBg,
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -88,15 +91,15 @@ class _StatusPageState extends State<StatusPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Header
-                  const Text('Driver Optimizer', style: AppTextStyles.headline),
+                  Text('Driver Optimizer', style: textTheme.headlineLarge),
                   const SizedBox(height: 4),
-                  const Text('Jaga koneksi & GPS Anda tetap hidup di jalan.',
-                      style: AppTextStyles.body),
+                  Text('Jaga koneksi & GPS Anda tetap hidup di jalan.',
+                      style: textTheme.bodyMedium),
                   const SizedBox(height: 24),
 
                   // Tombol Mulai / Status Aktif
-                  if (!isActive) _buildStartButton(provider)
-                  else _buildActiveBadge(provider),
+                  if (!isActive) _buildStartButton(provider, accentGreen, textTheme)
+                  else _buildActiveBadge(provider, accentGreen, textTheme),
 
                   const SizedBox(height: 24),
 
@@ -133,10 +136,10 @@ class _StatusPageState extends State<StatusPage> {
                     reachable: isActive
                         ? (conn.reachable ? 'Ya' : 'Tidak')
                         : (manualResult['reachable'] ?? 'Belum ada'),
-                    onCheck: () async {
+                    onCheck: () {
                       provider.manualCheck().then((res) {
                         setState(() {
-                        manualResult = res;
+                          manualResult = res;
                         });
                       });
                     },
@@ -177,7 +180,7 @@ class _StatusPageState extends State<StatusPage> {
     );
   }
 
-  Widget _buildStartButton(OptimizerProvider provider) {
+  Widget _buildStartButton(OptimizerProvider provider, Color accentGreen, TextTheme textTheme) {
     return Column(
       children: [
         SizedBox(
@@ -185,7 +188,7 @@ class _StatusPageState extends State<StatusPage> {
           height: 56,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accentGreen,
+              backgroundColor: accentGreen,
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -193,10 +196,7 @@ class _StatusPageState extends State<StatusPage> {
             onPressed: () async {
               try {
                 await provider.startOptimizer();
-                if (!mounted) return;
               } catch (e) {
-                if (!mounted) return;
-              
                 ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(e.toString())));
               }
@@ -205,19 +205,19 @@ class _StatusPageState extends State<StatusPage> {
           ),
         ),
         const SizedBox(height: 8),
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.battery_alert, color: AppColors.textSecondary, size: 18),
-            SizedBox(width: 4),
-            Text('Tidak aktif', style: AppTextStyles.body),
+            Icon(Icons.battery_alert, color: textTheme.bodySmall?.color, size: 18),
+            const SizedBox(width: 4),
+            Text('Tidak aktif', style: textTheme.bodyMedium),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildActiveBadge(OptimizerProvider provider) {
+  Widget _buildActiveBadge(OptimizerProvider provider, Color accentGreen, TextTheme textTheme) {
     final totalSecs = provider.totalDisplaySeconds;
     final hours = totalSecs ~/ 3600;
     final days = hours ~/ 24;
@@ -228,28 +228,26 @@ class _StatusPageState extends State<StatusPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.accentGreen.withAlpha((0.15 * 255).round()),
+            color: accentGreen.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.accentGreen),
+            border: Border.all(color: accentGreen),
           ),
           child: Row(children: [
-            const Icon(Icons.check_circle, color: AppColors.accentGreen),
+            Icon(Icons.check_circle, color: accentGreen),
             const SizedBox(width: 8),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('OPTIMIZER AKTIF',
+              Text('OPTIMIZER AKTIF',
                   style: TextStyle(
-                      color: AppColors.accentGreen,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
+                      color: accentGreen, fontWeight: FontWeight.bold, fontSize: 16)),
               Text(displayDuration,
-                  style: const TextStyle(color: AppColors.accentGreen, fontSize: 14)),
+                  style: TextStyle(color: accentGreen, fontSize: 14)),
             ]),
           ]),
         ),
         const Spacer(),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accentRed,
+            backgroundColor: Colors.redAccent,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
