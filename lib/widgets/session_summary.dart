@@ -76,7 +76,7 @@ class _StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(
-      backgroundColor: accent.withValues(alpha: 0.1),
+      backgroundColor: accent.withAlpha((0.1 * 255).round()),
       label: Text('$label: $value', style: TextStyle(color: accent, fontSize: 13)),
     );
   }

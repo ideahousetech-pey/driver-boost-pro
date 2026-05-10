@@ -228,7 +228,7 @@ class _StatusPageState extends State<StatusPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: accentGreen.withValues(alpha: 0.15),
+            color: accentGreen.withAlpha((0.15 * 255).round()),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: accentGreen),
           ),
