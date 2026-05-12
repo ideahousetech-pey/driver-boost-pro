@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/connection_status.dart';
@@ -58,10 +60,8 @@ class OptimizerProvider extends ChangeNotifier {
   // -------------------------------------------------------------
   // Pengaturan baru
   // -------------------------------------------------------------
-  String _gpsAccuracy = 'high';   // 'low', 'high', 'max'
+  String _gpsAccuracy = 'high';
   String get gpsAccuracy => _gpsAccuracy;
-  String _themeMode = 'dark';   // 'light', 'dark', atau 'system'
-  String get themeMode => _themeMode;
 
   bool _keepScreenOn = true;
   bool get keepScreenOn => _keepScreenOn;
@@ -74,6 +74,18 @@ class OptimizerProvider extends ChangeNotifier {
 
   bool _notifikasiDrop = true;
   bool get notifikasiDrop => _notifikasiDrop;
+
+  // -------------------------------------------------------------
+  // Tema
+  // -------------------------------------------------------------
+  String _themeMode = 'dark'; // 'light', 'dark', atau 'system'
+  String get themeMode => _themeMode;
+
+  // -------------------------------------------------------------
+  // Keamanan (belum digunakan secara aktif, tersedia untuk data sensitif)
+  // -------------------------------------------------------------
+  // ignore: unused_field
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   // -------------------------------------------------------------
   // Dialog peringatan
@@ -135,10 +147,11 @@ class OptimizerProvider extends ChangeNotifier {
     await prefs.setBool('autoReconnect', _autoReconnect);
     await prefs.setBool('modeHematBaterai', _modeHematBaterai);
     await prefs.setBool('notifikasiDrop', _notifikasiDrop);
+    await prefs.setString('themeMode', _themeMode);
   }
 
   // -------------------------------------------------------------
-  // Setter pengaturan baru (dengan efek langsung)
+  // Setter pengaturan baru (termasuk tema)
   // -------------------------------------------------------------
   Future<void> setInterval(int seconds) async {
     _intervalSeconds = seconds;
@@ -158,7 +171,6 @@ class OptimizerProvider extends ChangeNotifier {
   Future<void> setGpsAccuracy(String value) async {
     _gpsAccuracy = value;
     await _saveSettings();
-    // Tidak perlu kirim ke service, karena polling UI yang terpengaruh
     notifyListeners();
   }
 
@@ -181,7 +193,7 @@ class OptimizerProvider extends ChangeNotifier {
     _modeHematBaterai = value;
     await _saveSettings();
     if (_isActive) {
-      _sendSettingsToService(); // bisa ubah interval di service
+      _sendSettingsToService();
     }
     notifyListeners();
   }
@@ -194,26 +206,32 @@ class OptimizerProvider extends ChangeNotifier {
 
   Future<void> setThemeMode(String value) async {
     _themeMode = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('themeMode', value);
+    await _saveSettings();
     notifyListeners();
   }
 
   // -------------------------------------------------------------
   // Kontrol optimizer (start / stop)
   // -------------------------------------------------------------
+  Future<bool> _requestLocationPermissionWithRationale() async {
+    final status = await Permission.locationWhenInUse.status;
+    if (status.isGranted) return true;
+
+    if (status.isPermanentlyDenied) {
+      await openAppSettings();
+      return false;
+    }
+    return false;
+  }
+
   Future<void> startOptimizer() async {
     if (_isActive) return;
 
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      if (await Geolocator.requestPermission() == LocationPermission.denied) {
-        throw Exception('Izin lokasi ditolak');
-      }
+    final hasPermission = await _requestLocationPermissionWithRationale();
+    if (!hasPermission) {
+      throw Exception('Izin lokasi belum diberikan');
     }
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception('Izin lokasi ditolak permanen');
-    }
+
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw Exception('GPS belum aktif');
     }
@@ -241,7 +259,7 @@ class OptimizerProvider extends ChangeNotifier {
     _dronGpsCount = 0;
     _sessionDurationSecs = 0;
 
-    _applyKeepScreenOn();   // aktifkan wakelock jika disetel
+    _applyKeepScreenOn();
     _startSessionTimer();
     _startPolling();
     _startBatteryMonitor();
@@ -265,12 +283,12 @@ class OptimizerProvider extends ChangeNotifier {
     _gpsStatus = GpsStatus.empty();
     _elapsedSeconds = 0;
 
-    _releaseKeepScreenOn(); // lepas wakelock
+    _releaseKeepScreenOn();
     notifyListeners();
   }
 
   // -------------------------------------------------------------
-  // Wakelock (layar tetap menyala)
+  // Wakelock
   // -------------------------------------------------------------
   void _applyKeepScreenOn() {
     if (_keepScreenOn) {
@@ -380,17 +398,16 @@ class OptimizerProvider extends ChangeNotifier {
       return GpsStatus.empty();
     }
 
-    // Tentukan akurasi berdasarkan pengaturan
     LocationAccuracy accuracy;
     switch (_gpsAccuracy) {
       case 'low':
-        accuracy = LocationAccuracy.low;   // ±500m
+        accuracy = LocationAccuracy.low;
         break;
       case 'high':
-        accuracy = LocationAccuracy.high; // ±10m
+        accuracy = LocationAccuracy.high;
         break;
       case 'max':
-        accuracy = LocationAccuracy.best;  // navigasi
+        accuracy = LocationAccuracy.best;
         break;
       default:
         accuracy = LocationAccuracy.high;
@@ -416,7 +433,7 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // Log
+  // Log dengan pembatasan 100 entri & hapus >7 hari saat muat
   // -------------------------------------------------------------
   void _addLog(String eventType, String status) {
     _logs.insert(
@@ -427,7 +444,13 @@ class OptimizerProvider extends ChangeNotifier {
         status: status,
       ),
     );
+    while (_logs.length > 100) {
+      _logs.removeLast();
+    }
     _saveLogs();
+    if (kDebugMode) {
+      debugPrint('Log: $eventType ($status)');
+    }
     notifyListeners();
   }
 
@@ -474,7 +497,7 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // Penyimpanan log
+  // Penyimpanan log (filter >7 hari saat muat)
   // -------------------------------------------------------------
   Future<void> _saveLogs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -488,8 +511,14 @@ class OptimizerProvider extends ChangeNotifier {
     if (raw != null) {
       final decoded = jsonDecode(raw) as List<dynamic>;
       _logs.clear();
-      _logs.addAll(
-          decoded.map((e) => LogEntry.fromJson(Map<String, dynamic>.from(e))));
+      final now = DateTime.now();
+      for (var item in decoded) {
+        final log = LogEntry.fromJson(Map<String, dynamic>.from(item));
+        if (now.difference(log.timestamp).inDays < 7) {
+          _logs.add(log);
+        }
+      }
+      _saveLogs();
     }
   }
 

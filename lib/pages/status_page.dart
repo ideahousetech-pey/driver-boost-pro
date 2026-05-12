@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:app_settings/app_settings.dart';
 import '../providers/optimizer_provider.dart';
 import '../widgets/metric_card.dart';
@@ -74,7 +75,7 @@ class _StatusPageState extends State<StatusPage> {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final scaffoldBg = theme.scaffoldBackgroundColor;
-    final accentGreen = theme.primaryColor;
+    final accent = theme.primaryColor;   // warna aksen dari tema
 
     return Consumer<OptimizerProvider>(
       builder: (context, provider, child) {
@@ -97,11 +98,41 @@ class _StatusPageState extends State<StatusPage> {
                       style: textTheme.bodyMedium),
                   const SizedBox(height: 24),
 
-                  // Tombol Mulai / Status Aktif
-                  if (!isActive) _buildStartButton(provider, accentGreen, textTheme)
-                  else _buildActiveBadge(provider, accentGreen, textTheme),
+                  // Tombol toggle besar di tengah
+                  Center(
+                    child: _OptimizerToggle(
+                      isActive: isActive,
+                      accent: accent,                // <-- oper accent
+                      onToggle: (value) {
+                        if (value) {
+                          _startWithPermission(context, provider);
+                        } else {
+                          provider.stopOptimizer();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
-                  const SizedBox(height: 24),
+                  // Status teks di bawah tombol
+                  Center(
+                    child: Text(
+                      isActive ? 'OPTIMIZER AKTIF' : 'Optimizer Tidak Aktif',
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isActive ? accent : Colors.grey,
+                      ),
+                    ),
+                  ),
+                  if (isActive)
+                    Center(
+                      child: Text(
+                        '${provider.totalDisplaySeconds}d',
+                        style: textTheme.bodySmall?.copyWith(color: accent),
+                      ),
+                    ),
+
+                  const SizedBox(height: 32),
 
                   // Dua Kartu Status
                   Row(
@@ -138,6 +169,7 @@ class _StatusPageState extends State<StatusPage> {
                         : (manualResult['reachable'] ?? 'Belum ada'),
                     onCheck: () {
                       provider.manualCheck().then((res) {
+                        if (!mounted) return;
                         setState(() {
                           manualResult = res;
                         });
@@ -180,81 +212,135 @@ class _StatusPageState extends State<StatusPage> {
     );
   }
 
-  Widget _buildStartButton(OptimizerProvider provider, Color accentGreen, TextTheme textTheme) {
-    return Column(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentGreen,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            onPressed: () async {
-              try {
-                await provider.startOptimizer();
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(e.toString())));
-              }
-            },
-            child: const Text('TEKAN UNTUK MULAI'),
+  void _startWithPermission(BuildContext context, OptimizerProvider provider) async {
+    final status = await Permission.locationWhenInUse.status;
+    if (status.isDenied && !status.isPermanentlyDenied) {
+      if (!mounted) return;
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Izin Lokasi Diperlukan'),
+          content: const Text(
+            'Aplikasi ini memerlukan akses lokasi untuk memantau GPS Anda selama perjalanan.',
           ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.battery_alert, color: textTheme.bodySmall?.color, size: 18),
-            const SizedBox(width: 4),
-            Text('Tidak aktif', style: textTheme.bodyMedium),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Tolak'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Izinkan'),
+            ),
           ],
         ),
-      ],
+      );
+      if (result == true) {
+        await Permission.locationWhenInUse.request();
+      }
+    }
+
+    if (!mounted) return;
+    try {
+      await provider.startOptimizer();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+}
+
+// Widget tombol toggle bulat
+class _OptimizerToggle extends StatefulWidget {
+  final bool isActive;
+  final Color accent;
+  final ValueChanged<bool> onToggle;
+
+  const _OptimizerToggle({
+    required this.isActive,
+    required this.accent,
+    required this.onToggle,
+  });
+
+  @override
+  State<_OptimizerToggle> createState() => _OptimizerToggleState();
+}
+
+class _OptimizerToggleState extends State<_OptimizerToggle>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
 
-  Widget _buildActiveBadge(OptimizerProvider provider, Color accentGreen, TextTheme textTheme) {
-    final totalSecs = provider.totalDisplaySeconds;
-    final hours = totalSecs ~/ 3600;
-    final days = hours ~/ 24;
-    final displayDuration = days > 0 ? '${days}d' : '${totalSecs}s';
+  @override
+  void didUpdateWidget(covariant _OptimizerToggle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      _controller.forward().then((_) => _controller.reverse());
+    }
+  }
 
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: accentGreen.withAlpha((0.15 * 255).round()),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: accentGreen),
-          ),
-          child: Row(children: [
-            Icon(Icons.check_circle, color: accentGreen),
-            const SizedBox(width: 8),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('OPTIMIZER AKTIF',
-                  style: TextStyle(
-                      color: accentGreen, fontWeight: FontWeight.bold, fontSize: 16)),
-              Text(displayDuration,
-                  style: TextStyle(color: accentGreen, fontSize: 14)),
-            ]),
-          ]),
-        ),
-        const Spacer(),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.redAccent,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onPressed: () => provider.stopOptimizer(),
-          child: const Text('HENTIKAN'),
-        ),
-      ],
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    widget.onToggle(!widget.isActive);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = widget.accent;
+    final inactiveColor = Colors.grey.shade600;
+    final bgColor = widget.isActive ? activeColor : inactiveColor;
+
+    return GestureDetector(
+      onTap: _handleTap,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: bgColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.isActive
+                        ? activeColor.withAlpha((0.4 * 255).round())
+                        : Colors.black26,
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.power_settings_new,
+                size: 48,
+                color: Colors.white,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
