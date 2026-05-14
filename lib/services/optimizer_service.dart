@@ -12,86 +12,99 @@ void optimizerServiceTask() {
 }
 
 class OptimizerTaskHandler extends TaskHandler {
-  // ← hapus constructor dengan super.key, TaskHandler tidak punya key
-  Timer? _monitorTimer;
+  // Tidak ada konstruktor tambahan
+
+  StreamSubscription? _connectivitySub;
+  StreamSubscription? _gpsStatusSub;
+  Timer? _watchdogTimer;
+
   final Connectivity _connectivity = Connectivity();
 
+  // Pengaturan default (akan diperbarui oleh provider setelah start)
   int _intervalSeconds = 5;
   String _gpsAccuracy = 'high';
   bool _modeHematBaterai = false;
 
+  ConnectionStatus _lastConn = ConnectionStatus.empty();
+  GpsStatus _lastGps = GpsStatus.empty();
+
   @override
-  void onStart(DateTime timestamp) {
-    // ← void bukan Future<void>, hapus TaskStarter
-    _initAndStart();
-  }
+  Future<void> onStart(DateTime timestamp) async {
+    // Mulai pemantauan via stream
+    _startMonitoring();
 
-  Future<void> _initAndStart() async {
-    _intervalSeconds =
-        await FlutterForegroundTask.getData<int>(key: 'interval') ?? 5;
-    _gpsAccuracy =
-        await FlutterForegroundTask.getData<String>(key: 'gpsAccuracy') ?? 'high';
-    _modeHematBaterai =
-        await FlutterForegroundTask.getData<bool>(key: 'hematBaterai') ?? false;
-
-    _startPeriodicCheck();
+    // Pengecekan awal segera
+    await _performCheck();
   }
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    // tidak digunakan
+    // Tidak digunakan
   }
 
-  @override
-  void onReceiveData(Object data) {
-    if (data is Map) {
-      bool restartTimer = false;
-      if (data.containsKey('interval')) {
-        _intervalSeconds = data['interval'] as int;
-        restartTimer = true;
-      }
-      if (data.containsKey('gpsAccuracy')) {
-        _gpsAccuracy = data['gpsAccuracy'] as String;
-      }
-      if (data.containsKey('hematBaterai')) {
-        _modeHematBaterai = data['hematBaterai'] as bool;
-        restartTimer = true;
-      }
-      if (restartTimer) {
-        _startPeriodicCheck();
-      }
+  void _startMonitoring() {
+    // 1. Pantau perubahan koneksi internet
+    _connectivitySub = _connectivity.onConnectivityChanged.listen((result) async {
+      final conn = await _checkConnection();
+      _updateIfChanged(conn: conn);
+    });
+
+    // 2. Pantau status layanan lokasi (GPS on/off)
+    _gpsStatusSub = Geolocator.getServiceStatusStream().listen((status) async {
+      final gps = await _checkGps();
+      _updateIfChanged(gps: gps);
+    });
+
+    // 3. Watchdog fallback
+    _resetWatchdog();
+  }
+
+  void _resetWatchdog() {
+    _watchdogTimer?.cancel();
+    // Jika mode hemat baterai, watchdog jarang; jika tidak, 60 detik
+    int interval = _modeHematBaterai ? (_intervalSeconds * 2).clamp(30, 300) : 60;
+    _watchdogTimer = Timer(Duration(seconds: interval), () async {
+      await _performCheck();
+      _resetWatchdog();
+    });
+  }
+
+  Future<void> _performCheck() async {
+    final conn = await _checkConnection();
+    final gps = await _checkGps();
+    _updateIfChanged(conn: conn, gps: gps);
+  }
+
+  void _updateIfChanged({ConnectionStatus? conn, GpsStatus? gps}) {
+    bool changed = false;
+
+    if (conn != null &&
+        (conn.isConnected != _lastConn.isConnected ||
+            conn.connectionType != _lastConn.connectionType)) {
+      _lastConn = conn;
+      changed = true;
+    }
+
+    if (gps != null && gps.isFixed != _lastGps.isFixed) {
+      _lastGps = gps;
+      changed = true;
+    }
+
+    if (changed) {
+      FlutterForegroundTask.sendDataToMain({
+        'connection': _lastConn.toJson(),
+        'gps': _lastGps.toJson(),
+      });
+      _updateNotification(_lastConn, _lastGps);
     }
   }
 
-  void _startPeriodicCheck() {
-    _monitorTimer?.cancel();
-
-    final effectiveInterval = _modeHematBaterai
-        ? (_intervalSeconds * 2).clamp(5, 300)
-        : _intervalSeconds;
-
-    _monitorTimer = Timer.periodic(
-      Duration(seconds: effectiveInterval),
-      (_) async {
-        final conn = await _checkConnection();
-        final gps = await _checkGps();
-
-        FlutterForegroundTask.sendDataToMain({
-          'connection': conn.toJson(),
-          'gps': gps.toJson(),
-        });
-
-        await _updateNotification(conn, gps);
-      },
-    );
-  }
-
   Future<ConnectionStatus> _checkConnection() async {
-    final results = await _connectivity.checkConnectivity();
+    final connectivityResult = await _connectivity.checkConnectivity();
     String type = 'none';
-    if (results.contains(ConnectivityResult.wifi)) {
+    if (connectivityResult.contains(ConnectivityResult.wifi)) {
       type = 'wifi';
-    } else if (results.contains(ConnectivityResult.mobile)) {
+    } else if (connectivityResult.contains(ConnectivityResult.mobile)) {
       type = 'mobile';
     }
 
@@ -124,8 +137,11 @@ class OptimizerTaskHandler extends TaskHandler {
       case 'low':
         accuracy = LocationAccuracy.low;
         break;
+      case 'high':
+        accuracy = LocationAccuracy.high;
+        break;
       case 'max':
-        accuracy = LocationAccuracy.best;
+        accuracy = LocationAccuracy.bestForNavigation;
         break;
       default:
         accuracy = LocationAccuracy.high;
@@ -150,8 +166,7 @@ class OptimizerTaskHandler extends TaskHandler {
     }
   }
 
-  Future<void> _updateNotification(
-      ConnectionStatus conn, GpsStatus gps) async {
+  Future<void> _updateNotification(ConnectionStatus conn, GpsStatus gps) async {
     final connText = 'Internet: ${conn.stabilityText} (${conn.typeText})';
     final gpsText = gps.isFixed
         ? ' | GPS: Terkunci (${gps.accuracyText})'
@@ -163,8 +178,35 @@ class OptimizerTaskHandler extends TaskHandler {
   }
 
   @override
+  void onReceiveData(Object data) {
+    if (data is Map) {
+      bool restartWatchdog = false;
+      if (data.containsKey('interval')) {
+        _intervalSeconds = data['interval'] as int;
+        restartWatchdog = true;
+      }
+      if (data.containsKey('gpsAccuracy')) {
+        _gpsAccuracy = data['gpsAccuracy'] as String;
+      }
+      if (data.containsKey('hematBaterai')) {
+        _modeHematBaterai = data['hematBaterai'] as bool;
+        restartWatchdog = true;
+      }
+      if (restartWatchdog) {
+        _resetWatchdog();
+      }
+      // Jika diminta periksa ulang segera
+      if (data.containsKey('forceCheck')) {
+        _performCheck();
+      }
+    }
+  }
+
+  @override
   Future<void> onDestroy(DateTime timestamp) async {
-    _monitorTimer?.cancel();
+    _connectivitySub?.cancel();
+    _gpsStatusSub?.cancel();
+    _watchdogTimer?.cancel();
   }
 
   @override
