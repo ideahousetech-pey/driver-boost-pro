@@ -219,7 +219,7 @@ class PengaturanPage extends StatelessWidget {
                             style: textTheme.bodySmall),
                         const SizedBox(height: 12),
                         Text(
-                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara.',
+                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara. © M.P.V. Cloud CIS & ferry pey',
                           style: textTheme.bodySmall,
                         ),
                       ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';   // untuk SystemNavigator
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'providers/optimizer_provider.dart';
@@ -142,7 +143,7 @@ class _MainScreenState extends State<MainScreen> {
           isOptimizerActive: provider.isActive,
         );
         if (shouldExit && mounted) {
-          Navigator.of(context).pop();
+          SystemNavigator.pop();   // 👈 benar-benar keluar dari aplikasi
         }
       },
       child: Scaffold(

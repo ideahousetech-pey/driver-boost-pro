@@ -9,13 +9,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/connection_status.dart';
 import '../models/gps_status.dart';
+import '../models/log_entry.dart';
 import '../services/network_checker.dart';
 import '../services/gps_checker.dart';
 import '../services/adaptive_poller.dart';
 import '../services/optimizer_service.dart';
 import 'settings_store.dart';
 import 'log_store.dart';
-import '../models/log_entry.dart';
 
 class OptimizerProvider extends ChangeNotifier {
   final SettingsStore settingsStore;
@@ -23,7 +23,9 @@ class OptimizerProvider extends ChangeNotifier {
   final NetworkChecker _networkChecker;
   final GpsChecker _gpsChecker;
 
-  // State yang tetap dipertahankan
+  // -------------------------------------------------------------
+  // State dasar
+  // -------------------------------------------------------------
   bool _isActive = false;
   bool get isActive => _isActive;
 
@@ -51,6 +53,18 @@ class OptimizerProvider extends ChangeNotifier {
   int _batteryLevel = 100;
   int get batteryLevel => _batteryLevel;
 
+  // -------------------------------------------------------------
+  // Grace period (10 detik setelah start)
+  // -------------------------------------------------------------
+  DateTime? _gracePeriodEnd;
+  bool get _isGracePeriod {
+    if (_gracePeriodEnd == null) return false;
+    return DateTime.now().isBefore(_gracePeriodEnd!);
+  }
+
+  // -------------------------------------------------------------
+  // Dialog peringatan
+  // -------------------------------------------------------------
   bool _showDropDialog = false;
   bool get showDropDialog => _showDropDialog;
   String _dropType = '';
@@ -62,7 +76,9 @@ class OptimizerProvider extends ChangeNotifier {
 
   final Battery _battery = Battery();
 
-  // Konstruktor dengan dependensi baru
+  // -------------------------------------------------------------
+  // Konstruktor dengan dependensi
+  // -------------------------------------------------------------
   OptimizerProvider({
     required this.settingsStore,
     required this.logStore,
@@ -70,26 +86,27 @@ class OptimizerProvider extends ChangeNotifier {
     GpsChecker? gpsChecker,
   })  : _networkChecker = networkChecker ?? NetworkChecker(),
         _gpsChecker = gpsChecker ?? GpsChecker() {
-    // Dengarkan perubahan dari store lain, teruskan ke UI
     settingsStore.addListener(_onSettingsChanged);
     logStore.addListener(_onLogChanged);
   }
+
+  void _onSettingsChanged() => notifyListeners();
+  void _onLogChanged() => notifyListeners();
 
   // -------------------------------------------------------------
   // Inisialisasi (dipanggil dari main)
   // -------------------------------------------------------------
   Future<void> initialize() async {
-    // Baca total durasi dari SharedPreferences (jika ada)
     final prefs = await SharedPreferences.getInstance();
     _totalOptimizerSeconds = prefs.getInt('totalOptimizerSeconds') ?? 0;
 
-    // Cek apakah service sedang berjalan
     if (await FlutterForegroundTask.isRunningService) {
       final startTimestamp = prefs.getInt('sessionStartTimestamp');
       if (startTimestamp != null) {
         _isActive = true;
         final now = DateTime.now().millisecondsSinceEpoch;
         _elapsedSeconds = ((now - startTimestamp) / 1000).round().clamp(0, 99999);
+        // Grace period tidak berlaku setelah restart service
         _applyKeepScreenOn();
         _startSessionTimer();
         _startAdaptivePolling();
@@ -99,11 +116,8 @@ class OptimizerProvider extends ChangeNotifier {
     }
   }
 
-  void _onSettingsChanged() => notifyListeners();
-  void _onLogChanged() => notifyListeners();
-
   // -------------------------------------------------------------
-  // Getter pengaturan (diteruskan ke SettingsStore)
+  // Getter pengaturan (dari SettingsStore)
   // -------------------------------------------------------------
   int get intervalSeconds => settingsStore.intervalSeconds;
   bool get notificationEnabled => settingsStore.notificationEnabled;
@@ -116,7 +130,6 @@ class OptimizerProvider extends ChangeNotifier {
   bool get soundAlert => settingsStore.soundAlert;
   bool get vibrationAlert => settingsStore.vibrationAlert;
 
-  // Log dari LogStore
   List<LogEntry> get logs => logStore.logs;
 
   // -------------------------------------------------------------
@@ -202,6 +215,9 @@ class OptimizerProvider extends ChangeNotifier {
     _dronGpsCount = 0;
     _sessionDurationSecs = 0;
 
+    // Aktifkan grace period 10 detik
+    _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 10));
+
     _applyKeepScreenOn();
     _startSessionTimer();
     _startAdaptivePolling();
@@ -225,6 +241,7 @@ class OptimizerProvider extends ChangeNotifier {
     _connectionStatus = ConnectionStatus.empty();
     _gpsStatus = GpsStatus.empty();
     _elapsedSeconds = 0;
+    _gracePeriodEnd = null;
 
     _releaseKeepScreenOn();
     notifyListeners();
@@ -274,7 +291,6 @@ class OptimizerProvider extends ChangeNotifier {
   // -------------------------------------------------------------
   void _startAdaptivePolling() {
     _adaptivePoller?.stop();
-    // Tentukan base interval: jika mode hemat baterai, gandakan
     int base = settingsStore.intervalSeconds;
     if (settingsStore.modeHematBaterai) {
       base = (base * 2).clamp(5, 300);
@@ -294,7 +310,7 @@ class OptimizerProvider extends ChangeNotifier {
     final conn = await _networkChecker.check();
     final gps = await _gpsChecker.check(accuracy: settingsStore.gpsAccuracy);
 
-    // Deteksi perubahan status
+    // Deteksi perubahan status internet
     if (_connectionStatus.isConnected != conn.isConnected) {
       if (conn.isConnected) {
         logStore.add('Internet pulih', 'normal');
@@ -302,10 +318,14 @@ class OptimizerProvider extends ChangeNotifier {
       } else {
         logStore.add('Drop internet', 'drop');
         _dropNetCount++;
-        _triggerDropDialog('internet');
         _adaptivePoller?.markUnstable();
+        if (!_isGracePeriod) {
+          _triggerDropDialog('internet');
+        }
       }
     }
+
+    // Deteksi perubahan status GPS
     if (_gpsStatus.isFixed != gps.isFixed) {
       if (gps.isFixed) {
         logStore.add('GPS pulih', 'normal');
@@ -313,8 +333,10 @@ class OptimizerProvider extends ChangeNotifier {
       } else {
         logStore.add('GPS mati', 'drop');
         _dronGpsCount++;
-        _triggerDropDialog('gps');
         _adaptivePoller?.markUnstable();
+        if (!_isGracePeriod) {
+          _triggerDropDialog('gps');
+        }
       }
     }
 
@@ -340,7 +362,7 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // Pengecekan manual (dipanggil dari tombol "Cek sekarang")
+  // Pengecekan manual (dari tombol "Cek sekarang")
   // -------------------------------------------------------------
   Future<Map<String, String>> manualCheck() async {
     final conn = await _networkChecker.check();
