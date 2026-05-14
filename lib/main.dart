@@ -34,13 +34,11 @@ void main() async {
     ),
   );
 
-  // Inisialisasi store baru (tanpa menyentuh OptimizerProvider)
   final settingsStore = SettingsStore();
   final logStore = LogStore();
   await settingsStore.load();
   await logStore.load();
 
-  // OptimizerProvider TETAP seperti sebelumnya (tanpa parameter tambahan)
   final optimizerProvider = OptimizerProvider(
     settingsStore: settingsStore,
     logStore: logStore,
@@ -136,7 +134,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
+      onPopInvoked: (didPop) async {
         if (didPop) return;
         final provider = context.read<OptimizerProvider>();
         final shouldExit = await ConfirmExitDialog.show(
