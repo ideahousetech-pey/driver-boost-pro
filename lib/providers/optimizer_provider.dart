@@ -1,24 +1,29 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:battery_plus/battery_plus.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/connection_status.dart';
 import '../models/gps_status.dart';
-import '../models/log_entry.dart';
+import '../services/network_checker.dart';
+import '../services/gps_checker.dart';
+import '../services/adaptive_poller.dart';
 import '../services/optimizer_service.dart';
+import 'settings_store.dart';
+import 'log_store.dart';
+import '../models/log_entry.dart';
 
 class OptimizerProvider extends ChangeNotifier {
-  // -------------------------------------------------------------
-  // State dasar
-  // -------------------------------------------------------------
+  final SettingsStore settingsStore;
+  final LogStore logStore;
+  final NetworkChecker _networkChecker;
+  final GpsChecker _gpsChecker;
+
+  // State yang tetap dipertahankan
   bool _isActive = false;
   bool get isActive => _isActive;
 
@@ -46,72 +51,40 @@ class OptimizerProvider extends ChangeNotifier {
   int _batteryLevel = 100;
   int get batteryLevel => _batteryLevel;
 
-  final List<LogEntry> _logs = [];
-  List<LogEntry> get logs => _logs;
-
-  // -------------------------------------------------------------
-  // Pengaturan lama
-  // -------------------------------------------------------------
-  int _intervalSeconds = 5;
-  int get intervalSeconds => _intervalSeconds;
-  bool _notificationEnabled = true;
-  bool get notificationEnabled => _notificationEnabled;
-
-  // -------------------------------------------------------------
-  // Pengaturan baru
-  // -------------------------------------------------------------
-  String _gpsAccuracy = 'high';
-  String get gpsAccuracy => _gpsAccuracy;
-
-  bool _keepScreenOn = true;
-  bool get keepScreenOn => _keepScreenOn;
-
-  bool _autoReconnect = true;
-  bool get autoReconnect => _autoReconnect;
-
-  bool _modeHematBaterai = false;
-  bool get modeHematBaterai => _modeHematBaterai;
-
-  bool _notifikasiDrop = true;
-  bool get notifikasiDrop => _notifikasiDrop;
-
-  // -------------------------------------------------------------
-  // Tema
-  // -------------------------------------------------------------
-  String _themeMode = 'dark'; // 'light', 'dark', atau 'system'
-  String get themeMode => _themeMode;
-
-  // -------------------------------------------------------------
-  // Keamanan (belum digunakan secara aktif, tersedia untuk data sensitif)
-  // -------------------------------------------------------------
-  // ignore: unused_field
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-
-  // -------------------------------------------------------------
-  // Dialog peringatan
-  // -------------------------------------------------------------
   bool _showDropDialog = false;
   bool get showDropDialog => _showDropDialog;
   String _dropType = '';
   String get dropType => _dropType;
 
   Timer? _sessionTimer;
-  Timer? _pollTimer;
+  AdaptivePoller? _adaptivePoller;
   Timer? _batteryTimer;
 
   final Battery _battery = Battery();
 
+  // Konstruktor dengan dependensi baru
+  OptimizerProvider({
+    required this.settingsStore,
+    required this.logStore,
+    NetworkChecker? networkChecker,
+    GpsChecker? gpsChecker,
+  })  : _networkChecker = networkChecker ?? NetworkChecker(),
+        _gpsChecker = gpsChecker ?? GpsChecker() {
+    // Dengarkan perubahan dari store lain, teruskan ke UI
+    settingsStore.addListener(_onSettingsChanged);
+    logStore.addListener(_onLogChanged);
+  }
+
   // -------------------------------------------------------------
-  // Inisialisasi & penyimpanan pengaturan
+  // Inisialisasi (dipanggil dari main)
   // -------------------------------------------------------------
   Future<void> initialize() async {
-    await _loadSettings();
-    await _loadLogs();
-    _totalOptimizerSeconds =
-        (await SharedPreferences.getInstance()).getInt('totalOptimizerSeconds') ?? 0;
+    // Baca total durasi dari SharedPreferences (jika ada)
+    final prefs = await SharedPreferences.getInstance();
+    _totalOptimizerSeconds = prefs.getInt('totalOptimizerSeconds') ?? 0;
 
+    // Cek apakah service sedang berjalan
     if (await FlutterForegroundTask.isRunningService) {
-      final prefs = await SharedPreferences.getInstance();
       final startTimestamp = prefs.getInt('sessionStartTimestamp');
       if (startTimestamp != null) {
         _isActive = true;
@@ -119,96 +92,69 @@ class OptimizerProvider extends ChangeNotifier {
         _elapsedSeconds = ((now - startTimestamp) / 1000).round().clamp(0, 99999);
         _applyKeepScreenOn();
         _startSessionTimer();
-        _startPolling();
+        _startAdaptivePolling();
         _startBatteryMonitor();
         notifyListeners();
       }
     }
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    _intervalSeconds = prefs.getInt('interval') ?? 5;
-    _notificationEnabled = prefs.getBool('notificationEnabled') ?? true;
-    _gpsAccuracy = prefs.getString('gpsAccuracy') ?? 'high';
-    _keepScreenOn = prefs.getBool('keepScreenOn') ?? true;
-    _autoReconnect = prefs.getBool('autoReconnect') ?? true;
-    _modeHematBaterai = prefs.getBool('modeHematBaterai') ?? false;
-    _notifikasiDrop = prefs.getBool('notifikasiDrop') ?? true;
-    _themeMode = prefs.getString('themeMode') ?? 'dark';
-  }
-
-  Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('interval', _intervalSeconds);
-    await prefs.setBool('notificationEnabled', _notificationEnabled);
-    await prefs.setString('gpsAccuracy', _gpsAccuracy);
-    await prefs.setBool('keepScreenOn', _keepScreenOn);
-    await prefs.setBool('autoReconnect', _autoReconnect);
-    await prefs.setBool('modeHematBaterai', _modeHematBaterai);
-    await prefs.setBool('notifikasiDrop', _notifikasiDrop);
-    await prefs.setString('themeMode', _themeMode);
-  }
+  void _onSettingsChanged() => notifyListeners();
+  void _onLogChanged() => notifyListeners();
 
   // -------------------------------------------------------------
-  // Setter pengaturan baru (termasuk tema)
+  // Getter pengaturan (diteruskan ke SettingsStore)
+  // -------------------------------------------------------------
+  int get intervalSeconds => settingsStore.intervalSeconds;
+  bool get notificationEnabled => settingsStore.notificationEnabled;
+  String get gpsAccuracy => settingsStore.gpsAccuracy;
+  bool get keepScreenOn => settingsStore.keepScreenOn;
+  bool get autoReconnect => settingsStore.autoReconnect;
+  bool get modeHematBaterai => settingsStore.modeHematBaterai;
+  bool get notifikasiDrop => settingsStore.notifikasiDrop;
+  String get themeMode => settingsStore.themeMode;
+  bool get soundAlert => settingsStore.soundAlert;
+  bool get vibrationAlert => settingsStore.vibrationAlert;
+
+  // Log dari LogStore
+  List<LogEntry> get logs => logStore.logs;
+
+  // -------------------------------------------------------------
+  // Setter pengaturan (diteruskan ke SettingsStore)
   // -------------------------------------------------------------
   Future<void> setInterval(int seconds) async {
-    _intervalSeconds = seconds;
-    await _saveSettings();
+    await settingsStore.setInterval(seconds);
     if (_isActive) {
       _sendSettingsToService();
+      _restartAdaptivePolling();
     }
-    notifyListeners();
   }
 
-  Future<void> setNotificationEnabled(bool value) async {
-    _notificationEnabled = value;
-    await _saveSettings();
-    notifyListeners();
+  Future<void> setNotificationEnabled(bool v) async =>
+      await settingsStore.setNotificationEnabled(v);
+  Future<void> setGpsAccuracy(String v) async =>
+      await settingsStore.setGpsAccuracy(v);
+  Future<void> setKeepScreenOn(bool v) async {
+    await settingsStore.setKeepScreenOn(v);
+    if (_isActive) _applyKeepScreenOn();
   }
-
-  Future<void> setGpsAccuracy(String value) async {
-    _gpsAccuracy = value;
-    await _saveSettings();
-    notifyListeners();
-  }
-
-  Future<void> setKeepScreenOn(bool value) async {
-    _keepScreenOn = value;
-    await _saveSettings();
-    if (_isActive) {
-      _applyKeepScreenOn();
-    }
-    notifyListeners();
-  }
-
-  Future<void> setAutoReconnect(bool value) async {
-    _autoReconnect = value;
-    await _saveSettings();
-    notifyListeners();
-  }
-
-  Future<void> setModeHematBaterai(bool value) async {
-    _modeHematBaterai = value;
-    await _saveSettings();
+  Future<void> setAutoReconnect(bool v) async =>
+      await settingsStore.setAutoReconnect(v);
+  Future<void> setModeHematBaterai(bool v) async {
+    await settingsStore.setModeHematBaterai(v);
     if (_isActive) {
       _sendSettingsToService();
+      _restartAdaptivePolling();
     }
-    notifyListeners();
   }
-
-  Future<void> setNotifikasiDrop(bool value) async {
-    _notifikasiDrop = value;
-    await _saveSettings();
-    notifyListeners();
-  }
-
-  Future<void> setThemeMode(String value) async {
-    _themeMode = value;
-    await _saveSettings();
-    notifyListeners();
-  }
+  Future<void> setNotifikasiDrop(bool v) async =>
+      await settingsStore.setNotifikasiDrop(v);
+  Future<void> setThemeMode(String v) async =>
+      await settingsStore.setThemeMode(v);
+  Future<void> setSoundAlert(bool v) async =>
+      await settingsStore.setSoundAlert(v);
+  Future<void> setVibrationAlert(bool v) async =>
+      await settingsStore.setVibrationAlert(v);
 
   // -------------------------------------------------------------
   // Kontrol optimizer (start / stop)
@@ -216,7 +162,6 @@ class OptimizerProvider extends ChangeNotifier {
   Future<bool> _requestLocationPermissionWithRationale() async {
     final status = await Permission.locationWhenInUse.status;
     if (status.isGranted) return true;
-
     if (status.isPermanentlyDenied) {
       await openAppSettings();
       return false;
@@ -228,9 +173,7 @@ class OptimizerProvider extends ChangeNotifier {
     if (_isActive) return;
 
     final hasPermission = await _requestLocationPermissionWithRationale();
-    if (!hasPermission) {
-      throw Exception('Izin lokasi belum diberikan');
-    }
+    if (!hasPermission) throw Exception('Izin lokasi belum diberikan');
 
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw Exception('GPS belum aktif');
@@ -261,7 +204,7 @@ class OptimizerProvider extends ChangeNotifier {
 
     _applyKeepScreenOn();
     _startSessionTimer();
-    _startPolling();
+    _startAdaptivePolling();
     _startBatteryMonitor();
     notifyListeners();
   }
@@ -270,7 +213,7 @@ class OptimizerProvider extends ChangeNotifier {
     if (!_isActive) return;
     await FlutterForegroundTask.stopService();
     _sessionTimer?.cancel();
-    _pollTimer?.cancel();
+    _adaptivePoller?.stop();
     _batteryTimer?.cancel();
 
     _totalOptimizerSeconds += _elapsedSeconds;
@@ -291,7 +234,7 @@ class OptimizerProvider extends ChangeNotifier {
   // Wakelock
   // -------------------------------------------------------------
   void _applyKeepScreenOn() {
-    if (_keepScreenOn) {
+    if (settingsStore.keepScreenOn) {
       WakelockPlus.enable();
     } else {
       WakelockPlus.disable();
@@ -307,14 +250,14 @@ class OptimizerProvider extends ChangeNotifier {
   // -------------------------------------------------------------
   void _sendSettingsToService() {
     FlutterForegroundTask.sendDataToTask({
-      'interval': _intervalSeconds,
-      'gpsAccuracy': _gpsAccuracy,
-      'hematBaterai': _modeHematBaterai,
+      'interval': settingsStore.intervalSeconds,
+      'gpsAccuracy': settingsStore.gpsAccuracy,
+      'hematBaterai': settingsStore.modeHematBaterai,
     });
   }
 
   // -------------------------------------------------------------
-  // Timer internal
+  // Timer session (durasi)
   // -------------------------------------------------------------
   void _startSessionTimer() {
     _sessionTimer?.cancel();
@@ -326,34 +269,52 @@ class OptimizerProvider extends ChangeNotifier {
     });
   }
 
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
-      if (!_isActive) return;
-      await _performPoll();
-    });
+  // -------------------------------------------------------------
+  // Adaptive polling
+  // -------------------------------------------------------------
+  void _startAdaptivePolling() {
+    _adaptivePoller?.stop();
+    // Tentukan base interval: jika mode hemat baterai, gandakan
+    int base = settingsStore.intervalSeconds;
+    if (settingsStore.modeHematBaterai) {
+      base = (base * 2).clamp(5, 300);
+    }
+    _adaptivePoller = AdaptivePoller(
+      baseIntervalSeconds: base,
+      callback: _performPoll,
+    );
+    _adaptivePoller!.start();
+  }
+
+  void _restartAdaptivePolling() {
+    if (_isActive) _startAdaptivePolling();
   }
 
   Future<void> _performPoll() async {
-    final conn = await _checkConnectionDirect();
-    final gps = await _checkGpsDirect();
+    final conn = await _networkChecker.check();
+    final gps = await _gpsChecker.check(accuracy: settingsStore.gpsAccuracy);
 
+    // Deteksi perubahan status
     if (_connectionStatus.isConnected != conn.isConnected) {
       if (conn.isConnected) {
-        _addLog('Internet pulih', 'normal');
+        logStore.add('Internet pulih', 'normal');
+        _adaptivePoller?.markStable();
       } else {
-        _addLog('Drop internet', 'drop');
+        logStore.add('Drop internet', 'drop');
         _dropNetCount++;
         _triggerDropDialog('internet');
+        _adaptivePoller?.markUnstable();
       }
     }
     if (_gpsStatus.isFixed != gps.isFixed) {
       if (gps.isFixed) {
-        _addLog('GPS pulih', 'normal');
+        logStore.add('GPS pulih', 'normal');
+        _adaptivePoller?.markStable();
       } else {
-        _addLog('GPS mati', 'drop');
+        logStore.add('GPS mati', 'drop');
         _dronGpsCount++;
         _triggerDropDialog('gps');
+        _adaptivePoller?.markUnstable();
       }
     }
 
@@ -364,96 +325,9 @@ class OptimizerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<ConnectionStatus> _checkConnectionDirect() async {
-    final connectivity = Connectivity();
-    final result = await connectivity.checkConnectivity();
-    String type = 'none';
-    if (result.contains(ConnectivityResult.wifi)) {
-      type = 'wifi';
-    } else if (result.contains(ConnectivityResult.mobile)) {
-      type = 'mobile';
-    }
-
-    bool reachable = false;
-    int latency = 0;
-    try {
-      final sw = Stopwatch()..start();
-      final lookup = await InternetAddress.lookup('8.8.8.8')
-          .timeout(const Duration(seconds: 2));
-      reachable = lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty;
-      sw.stop();
-      latency = sw.elapsedMilliseconds;
-    } catch (_) {}
-
-    return ConnectionStatus(
-      isConnected: reachable,
-      connectionType: type,
-      latencyMs: latency,
-      reachable: reachable,
-    );
-  }
-
-  Future<GpsStatus> _checkGpsDirect() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      return GpsStatus.empty();
-    }
-
-    LocationAccuracy accuracy;
-    switch (_gpsAccuracy) {
-      case 'low':
-        accuracy = LocationAccuracy.low;
-        break;
-      case 'high':
-        accuracy = LocationAccuracy.high;
-        break;
-      case 'max':
-        accuracy = LocationAccuracy.bestForNavigation;  // ← ubah dari best ke bestForNavigation
-        break;
-      default:
-        accuracy = LocationAccuracy.high;
-    }
-
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: accuracy,
-        timeLimit: const Duration(seconds: 3),
-      );
-      return GpsStatus(
-        isFixed: true,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        accuracy: position.accuracy,
-        speed: position.speed,
-        bearing: position.heading,
-        altitude: position.altitude,
-      );
-    } catch (_) {
-      return GpsStatus.empty();
-    }
-  }
-
   // -------------------------------------------------------------
-  // Log dengan pembatasan 100 entri & hapus >7 hari saat muat
+  // Dialog peringatan
   // -------------------------------------------------------------
-  void _addLog(String eventType, String status) {
-    _logs.insert(
-      0,
-      LogEntry(
-        timestamp: DateTime.now(),
-        eventType: eventType,
-        status: status,
-      ),
-    );
-    while (_logs.length > 100) {
-      _logs.removeLast();
-    }
-    _saveLogs();
-    if (kDebugMode) {
-      debugPrint('Log: $eventType ($status)');
-    }
-    notifyListeners();
-  }
-
   void _triggerDropDialog(String type) {
     _showDropDialog = true;
     _dropType = type;
@@ -466,11 +340,11 @@ class OptimizerProvider extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------
-  // Pengecekan manual
+  // Pengecekan manual (dipanggil dari tombol "Cek sekarang")
   // -------------------------------------------------------------
   Future<Map<String, String>> manualCheck() async {
-    final conn = await _checkConnectionDirect();
-    final gps = await _checkGpsDirect();
+    final conn = await _networkChecker.check();
+    final gps = await _gpsChecker.check(accuracy: settingsStore.gpsAccuracy);
     return {
       'latency': conn.latencyMs > 0 ? '${conn.latencyMs} ms' : 'Gagal',
       'reachable': conn.reachable ? 'Ya' : 'Tidak',
@@ -496,36 +370,12 @@ class OptimizerProvider extends ChangeNotifier {
     });
   }
 
-  // -------------------------------------------------------------
-  // Penyimpanan log (filter >7 hari saat muat)
-  // -------------------------------------------------------------
-  Future<void> _saveLogs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'logs', jsonEncode(_logs.map((e) => e.toJson()).toList()));
-  }
-
-  Future<void> _loadLogs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('logs');
-    if (raw != null) {
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      _logs.clear();
-      final now = DateTime.now();
-      for (var item in decoded) {
-        final log = LogEntry.fromJson(Map<String, dynamic>.from(item));
-        if (now.difference(log.timestamp).inDays < 7) {
-          _logs.add(log);
-        }
-      }
-      _saveLogs();
-    }
-  }
-
   @override
   void dispose() {
+    settingsStore.removeListener(_onSettingsChanged);
+    logStore.removeListener(_onLogChanged);
     _sessionTimer?.cancel();
-    _pollTimer?.cancel();
+    _adaptivePoller?.stop();
     _batteryTimer?.cancel();
     _releaseKeepScreenOn();
     super.dispose();

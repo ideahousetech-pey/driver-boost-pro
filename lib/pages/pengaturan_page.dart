@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_settings/app_settings.dart';
 import '../providers/optimizer_provider.dart';
+import '../providers/settings_store.dart';
 import '../utils/constants.dart';
 
 class PengaturanPage extends StatelessWidget {
@@ -13,8 +14,8 @@ class PengaturanPage extends StatelessWidget {
     final textTheme = theme.textTheme;
     final cardColor = theme.cardColor;
 
-    return Consumer<OptimizerProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<OptimizerProvider, SettingsStore>(
+      builder: (context, provider, settingsStore, _) {
         return Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
           body: SafeArea(
@@ -132,6 +133,34 @@ class PengaturanPage extends StatelessWidget {
                                 ? AppColors.accentGreen
                                 : null),
                       ),
+                      // ---------- Suara & Getar (dari SettingsStore) ----------
+                      SwitchListTile(
+                        title: Text('Suara Peringatan',
+                            style: textTheme.bodyLarge),
+                        subtitle: Text(
+                            'Bunyi saat terjadi drop sinyal.',
+                            style: textTheme.bodySmall),
+                        value: settingsStore.soundAlert,
+                        onChanged: (val) => settingsStore.setSoundAlert(val),
+                        thumbColor: WidgetStateProperty.resolveWith((states) =>
+                            states.contains(WidgetState.selected)
+                                ? AppColors.accentGreen
+                                : null),
+                      ),
+                      SwitchListTile(
+                        title: Text('Getar Peringatan',
+                            style: textTheme.bodyLarge),
+                        subtitle: Text(
+                            'Getar saat terjadi drop sinyal.',
+                            style: textTheme.bodySmall),
+                        value: settingsStore.vibrationAlert,
+                        onChanged: (val) =>
+                            settingsStore.setVibrationAlert(val),
+                        thumbColor: WidgetStateProperty.resolveWith((states) =>
+                            states.contains(WidgetState.selected)
+                                ? AppColors.accentGreen
+                                : null),
+                      ),
                     ],
                   ),
                 ),
@@ -157,8 +186,8 @@ class PengaturanPage extends StatelessWidget {
                       ),
                       RadioListTile<String>(
                         title: Text('Terang', style: textTheme.bodyLarge),
-                        subtitle:
-                            Text('Tema terang', style: textTheme.bodySmall),
+                        subtitle: Text('Tema terang',
+                            style: textTheme.bodySmall),
                         value: 'light',
                         groupValue: provider.themeMode,
                         onChanged: (val) => provider.setThemeMode(val!),
@@ -190,7 +219,7 @@ class PengaturanPage extends StatelessWidget {
                             style: textTheme.bodySmall),
                         const SizedBox(height: 12),
                         Text(
-                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara. © M.P.V. Cloud CIS & ferry pey',
+                          'Driver Optimizer berjalan di latar depan untuk menjaga sinyal GPS dan internet tetap aktif. Untuk hasil maksimal, biarkan aplikasi terbuka selama berkendara.',
                           style: textTheme.bodySmall,
                         ),
                       ],
@@ -232,13 +261,13 @@ class PengaturanPage extends StatelessWidget {
           if (states.contains(WidgetState.selected)) {
             return AppColors.accentGreen;
           }
-          return Colors.transparent; // use default card color via parent
+          return Colors.transparent;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return Colors.black;
           }
-          return null; // default text color
+          return null;
         }),
       ),
     );

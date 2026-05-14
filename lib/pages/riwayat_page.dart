@@ -17,14 +17,15 @@ class _RiwayatPageState extends State<RiwayatPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final accentGreen = theme.primaryColor;
+    final accent = theme.primaryColor;
 
     return Consumer<OptimizerProvider>(
       builder: (context, provider, _) {
         final logs = provider.logs.where((log) {
           if (_filterDate == null) return true;
-          return DateFormat('yyyy-MM-dd').format(log.timestamp) ==
-              DateFormat('yyyy-MM-dd').format(_filterDate!);
+          final filterDay = DateFormat('yyyy-MM-dd').format(_filterDate!);
+          final logDay = DateFormat('yyyy-MM-dd').format(log.timestamp);
+          return logDay == filterDay;
         }).toList();
 
         return Scaffold(
@@ -48,7 +49,7 @@ class _RiwayatPageState extends State<RiwayatPage> {
                             builder: (context, child) => Theme(
                               data: Theme.of(context).copyWith(
                                 colorScheme: ColorScheme.fromSeed(
-                                  seedColor: accentGreen,
+                                  seedColor: accent,
                                   brightness: Theme.of(context).brightness,
                                 ),
                               ),
@@ -57,12 +58,12 @@ class _RiwayatPageState extends State<RiwayatPage> {
                           );
                           if (picked != null) setState(() => _filterDate = picked);
                         },
-                        icon: Icon(Icons.filter_list, color: accentGreen),
+                        icon: Icon(Icons.filter_list, color: accent),
                         label: Text(
                           _filterDate == null
                               ? 'Filter'
                               : DateFormat('dd/MM').format(_filterDate!),
-                          style: TextStyle(color: accentGreen),
+                          style: TextStyle(color: accent),
                         ),
                       ),
                     ],
@@ -71,7 +72,8 @@ class _RiwayatPageState extends State<RiwayatPage> {
                 Expanded(
                   child: logs.isEmpty
                       ? Center(
-                          child: Text('Belum ada riwayat.', style: textTheme.bodyMedium))
+                          child: Text('Belum ada riwayat.',
+                              style: textTheme.bodyMedium))
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: logs.length,
@@ -85,14 +87,17 @@ class _RiwayatPageState extends State<RiwayatPage> {
                               child: ListTile(
                                 leading: Icon(
                                   isDrop ? Icons.error : Icons.check_circle,
-                                  color: isDrop ? Colors.redAccent : accentGreen,
+                                  color: isDrop ? Colors.redAccent : accent,
                                 ),
                                 title: Text(log.eventType,
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: isDrop ? Colors.redAccent : accentGreen)),
+                                        color: isDrop
+                                            ? Colors.redAccent
+                                            : accent)),
                                 subtitle: Text(
-                                  DateFormat('dd/MM/yyyy HH:mm:ss').format(log.timestamp),
+                                  DateFormat('dd/MM/yyyy HH:mm:ss')
+                                      .format(log.timestamp),
                                   style: textTheme.bodySmall,
                                 ),
                               ),
