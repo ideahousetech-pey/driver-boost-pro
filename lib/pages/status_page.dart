@@ -146,8 +146,16 @@ class _StatusPageState extends State<StatusPage> {
                         child: MetricCard(
                           icon: Icons.signal_cellular_alt,
                           label: 'INTERNET',
-                          value: isActive ? conn.stabilityText : null,
-                          subtitle: isActive ? conn.typeText : null,
+                          value: isActive 
+                              ? (provider.initialDataReceived
+                                  ? conn.stabilityText 
+                                  : 'Memeriksa...')
+                              : null,
+                          subtitle: isActive 
+                              ? (provider.initialDataReceived 
+                                  ? conn.typeText 
+                                  : null)
+                              : null,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -155,8 +163,16 @@ class _StatusPageState extends State<StatusPage> {
                         child: MetricCard(
                           icon: Icons.location_on,
                           label: 'GPS',
-                          value: isActive ? gps.fixText : null,
-                          subtitle: isActive ? gps.accuracyText : null,
+                          value: isActive 
+                              ? (provider.initialDataReceived 
+                                  ? gps.fixText 
+                                  : 'Memeriksa...') 
+                              : null,
+                          subtitle: isActive 
+                              ? (provider.initialDataReceived 
+                                  ? gps.accuracyText 
+                                  : null)
+                              : null,
                         ),
                       ),
                     ],

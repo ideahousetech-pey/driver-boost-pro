@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';   // untuk SystemNavigator
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'providers/optimizer_provider.dart';
@@ -8,7 +8,6 @@ import 'providers/log_store.dart';
 import 'pages/status_page.dart';
 import 'pages/riwayat_page.dart';
 import 'pages/pengaturan_page.dart';
-import 'widgets/confirm_exit_dialog.dart';
 import 'utils/constants.dart';
 
 void main() async {
@@ -138,12 +137,10 @@ class _MainScreenState extends State<MainScreen> {
       onPopInvoked: (didPop) async {
         if (didPop) return;
         final provider = context.read<OptimizerProvider>();
-        final shouldExit = await ConfirmExitDialog.show(
-          context,
-          isOptimizerActive: provider.isActive,
-        );
+        // Tampilkan dialog konfirmasi
+        final shouldExit = await _showExitDialog(context, provider.isActive);
         if (shouldExit && mounted) {
-          SystemNavigator.pop();   // 👈 benar-benar keluar dari aplikasi
+          SystemNavigator.pop();
         }
       },
       child: Scaffold(
@@ -159,5 +156,27 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+  }
+
+  Future<bool> _showExitDialog(BuildContext context, bool isActive) async {
+    if (!isActive) return true; // Jika tidak aktif, langsung bisa keluar
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Optimizer Sedang Aktif'),
+        content: const Text('Optimizer masih berjalan. Yakin ingin keluar?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Tetap di sini'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 }

@@ -28,6 +28,8 @@ class OptimizerProvider extends ChangeNotifier {
   // -------------------------------------------------------------
   bool _isActive = false;
   bool get isActive => _isActive;
+  bool _initialDataReceived = false;
+  bool get initialDataReceived => _initialDataReceived;
 
   ConnectionStatus _connectionStatus = ConnectionStatus.empty();
   ConnectionStatus get connectionStatus => _connectionStatus;
@@ -214,6 +216,7 @@ class OptimizerProvider extends ChangeNotifier {
     _dropNetCount = 0;
     _dronGpsCount = 0;
     _sessionDurationSecs = 0;
+    _initialDataReceived = false;
 
     // Aktifkan grace period 10 detik
     _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 10));
@@ -299,6 +302,9 @@ class OptimizerProvider extends ChangeNotifier {
       baseIntervalSeconds: base,
       callback: _performPoll,
     );
+      if (!_initialDataReceived) {
+         _initialDataReceived = true;
+    };
     _adaptivePoller!.start();
   }
 
