@@ -198,6 +198,7 @@ class OptimizerProvider extends ChangeNotifier {
     _applyKeepScreenOn();
     _startSessionTimer();
     _startAdaptivePolling();
+    _performPoll();
     _startBatteryMonitor();
     notifyListeners();
   }
