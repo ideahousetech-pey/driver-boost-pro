@@ -23,13 +23,8 @@ class OptimizerProvider extends ChangeNotifier {
   final NetworkChecker _networkChecker;
   final GpsChecker _gpsChecker;
 
-  // -------------------------------------------------------------
-  // State dasar
-  // -------------------------------------------------------------
   bool _isActive = false;
   bool get isActive => _isActive;
-  bool _initialDataReceived = false;
-  bool get initialDataReceived => _initialDataReceived;
 
   ConnectionStatus _connectionStatus = ConnectionStatus.empty();
   ConnectionStatus get connectionStatus => _connectionStatus;
@@ -55,18 +50,15 @@ class OptimizerProvider extends ChangeNotifier {
   int _batteryLevel = 100;
   int get batteryLevel => _batteryLevel;
 
-  // -------------------------------------------------------------
-  // Grace period (10 detik setelah start)
-  // -------------------------------------------------------------
+  bool _initialDataReceived = false;
+  bool get initialDataReceived => _initialDataReceived;
+
   DateTime? _gracePeriodEnd;
   bool get _isGracePeriod {
     if (_gracePeriodEnd == null) return false;
     return DateTime.now().isBefore(_gracePeriodEnd!);
   }
 
-  // -------------------------------------------------------------
-  // Dialog peringatan
-  // -------------------------------------------------------------
   bool _showDropDialog = false;
   bool get showDropDialog => _showDropDialog;
   String _dropType = '';
@@ -78,9 +70,6 @@ class OptimizerProvider extends ChangeNotifier {
 
   final Battery _battery = Battery();
 
-  // -------------------------------------------------------------
-  // Konstruktor dengan dependensi
-  // -------------------------------------------------------------
   OptimizerProvider({
     required this.settingsStore,
     required this.logStore,
@@ -95,9 +84,6 @@ class OptimizerProvider extends ChangeNotifier {
   void _onSettingsChanged() => notifyListeners();
   void _onLogChanged() => notifyListeners();
 
-  // -------------------------------------------------------------
-  // Inisialisasi (dipanggil dari main)
-  // -------------------------------------------------------------
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     _totalOptimizerSeconds = prefs.getInt('totalOptimizerSeconds') ?? 0;
@@ -108,7 +94,6 @@ class OptimizerProvider extends ChangeNotifier {
         _isActive = true;
         final now = DateTime.now().millisecondsSinceEpoch;
         _elapsedSeconds = ((now - startTimestamp) / 1000).round().clamp(0, 99999);
-        // Grace period tidak berlaku setelah restart service
         _applyKeepScreenOn();
         _startSessionTimer();
         _startAdaptivePolling();
@@ -118,9 +103,6 @@ class OptimizerProvider extends ChangeNotifier {
     }
   }
 
-  // -------------------------------------------------------------
-  // Getter pengaturan (dari SettingsStore)
-  // -------------------------------------------------------------
   int get intervalSeconds => settingsStore.intervalSeconds;
   bool get notificationEnabled => settingsStore.notificationEnabled;
   String get gpsAccuracy => settingsStore.gpsAccuracy;
@@ -134,9 +116,6 @@ class OptimizerProvider extends ChangeNotifier {
 
   List<LogEntry> get logs => logStore.logs;
 
-  // -------------------------------------------------------------
-  // Setter pengaturan (diteruskan ke SettingsStore)
-  // -------------------------------------------------------------
   Future<void> setInterval(int seconds) async {
     await settingsStore.setInterval(seconds);
     if (_isActive) {
@@ -171,9 +150,6 @@ class OptimizerProvider extends ChangeNotifier {
   Future<void> setVibrationAlert(bool v) async =>
       await settingsStore.setVibrationAlert(v);
 
-  // -------------------------------------------------------------
-  // Kontrol optimizer (start / stop)
-  // -------------------------------------------------------------
   Future<bool> _requestLocationPermissionWithRationale() async {
     final status = await Permission.locationWhenInUse.status;
     if (status.isGranted) return true;
@@ -217,8 +193,6 @@ class OptimizerProvider extends ChangeNotifier {
     _dronGpsCount = 0;
     _sessionDurationSecs = 0;
     _initialDataReceived = false;
-
-    // Aktifkan grace period 10 detik
     _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 10));
 
     _applyKeepScreenOn();
@@ -244,15 +218,13 @@ class OptimizerProvider extends ChangeNotifier {
     _connectionStatus = ConnectionStatus.empty();
     _gpsStatus = GpsStatus.empty();
     _elapsedSeconds = 0;
+    _initialDataReceived = false;
     _gracePeriodEnd = null;
 
     _releaseKeepScreenOn();
     notifyListeners();
   }
 
-  // -------------------------------------------------------------
-  // Wakelock
-  // -------------------------------------------------------------
   void _applyKeepScreenOn() {
     if (settingsStore.keepScreenOn) {
       WakelockPlus.enable();
@@ -265,9 +237,6 @@ class OptimizerProvider extends ChangeNotifier {
     WakelockPlus.disable();
   }
 
-  // -------------------------------------------------------------
-  // Kirim pengaturan ke foreground service
-  // -------------------------------------------------------------
   void _sendSettingsToService() {
     FlutterForegroundTask.sendDataToTask({
       'interval': settingsStore.intervalSeconds,
@@ -276,9 +245,6 @@ class OptimizerProvider extends ChangeNotifier {
     });
   }
 
-  // -------------------------------------------------------------
-  // Timer session (durasi)
-  // -------------------------------------------------------------
   void _startSessionTimer() {
     _sessionTimer?.cancel();
     _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -289,9 +255,6 @@ class OptimizerProvider extends ChangeNotifier {
     });
   }
 
-  // -------------------------------------------------------------
-  // Adaptive polling
-  // -------------------------------------------------------------
   void _startAdaptivePolling() {
     _adaptivePoller?.stop();
     int base = settingsStore.intervalSeconds;
@@ -302,9 +265,6 @@ class OptimizerProvider extends ChangeNotifier {
       baseIntervalSeconds: base,
       callback: _performPoll,
     );
-      if (!_initialDataReceived) {
-         _initialDataReceived = true;
-    };
     _adaptivePoller!.start();
   }
 
@@ -316,7 +276,6 @@ class OptimizerProvider extends ChangeNotifier {
     final conn = await _networkChecker.check();
     final gps = await _gpsChecker.check(accuracy: settingsStore.gpsAccuracy);
 
-    // Deteksi perubahan status internet
     if (_connectionStatus.isConnected != conn.isConnected) {
       if (conn.isConnected) {
         logStore.add('Internet pulih', 'normal');
@@ -331,7 +290,6 @@ class OptimizerProvider extends ChangeNotifier {
       }
     }
 
-    // Deteksi perubahan status GPS
     if (_gpsStatus.isFixed != gps.isFixed) {
       if (gps.isFixed) {
         logStore.add('GPS pulih', 'normal');
@@ -350,12 +308,12 @@ class OptimizerProvider extends ChangeNotifier {
     _gpsStatus = gps;
     _heartbeatCount++;
     if (gps.isFixed) _fixGpsCount++;
+    if (!_initialDataReceived) {
+      _initialDataReceived = true;
+    }
     notifyListeners();
   }
 
-  // -------------------------------------------------------------
-  // Dialog peringatan
-  // -------------------------------------------------------------
   void _triggerDropDialog(String type) {
     _showDropDialog = true;
     _dropType = type;
@@ -367,9 +325,6 @@ class OptimizerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // -------------------------------------------------------------
-  // Pengecekan manual (dari tombol "Cek sekarang")
-  // -------------------------------------------------------------
   Future<Map<String, String>> manualCheck() async {
     final conn = await _networkChecker.check();
     final gps = await _gpsChecker.check(accuracy: settingsStore.gpsAccuracy);
@@ -381,9 +336,6 @@ class OptimizerProvider extends ChangeNotifier {
     };
   }
 
-  // -------------------------------------------------------------
-  // Baterai
-  // -------------------------------------------------------------
   void _startBatteryMonitor() {
     _batteryTimer?.cancel();
     _batteryTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
