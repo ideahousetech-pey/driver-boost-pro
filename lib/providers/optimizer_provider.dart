@@ -407,7 +407,7 @@ class OptimizerProvider extends ChangeNotifier {
         accuracy = LocationAccuracy.high;
         break;
       case 'max':
-        accuracy = LocationAccuracy.best;
+        accuracy = LocationAccuracy.bestForNavigation;  // ← ubah dari best ke bestForNavigation
         break;
       default:
         accuracy = LocationAccuracy.high;

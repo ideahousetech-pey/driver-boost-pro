@@ -27,47 +27,52 @@ class _StatusPageState extends State<StatusPage> {
     });
   }
 
-  void _checkDropDialog() {
+    void _checkDropDialog() {
     final provider = context.read<OptimizerProvider>();
     if (provider.showDropDialog) {
       _showDropAlert(provider);
     }
   }
 
-  void _showDropAlert(OptimizerProvider provider) {
+  void _showDropAlert(OptimizerProvider provider) async {
     final type = provider.dropType;
     final title = type == 'internet' ? 'Internet Terputus' : 'GPS Tidak Aktif';
     final content = type == 'internet'
         ? 'Aktifkan data seluler atau WiFi.'
         : 'Aktifkan GPS di pengaturan perangkat.';
-    showDialog(
+
+    // Tampilkan dialog
+    final result = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: Text(content),
         actions: [
           TextButton(
-            onPressed: () {
-              provider.dismissDropDialog();
-              Navigator.pop(ctx);
-            },
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Nanti'),
           ),
           ElevatedButton(
-            onPressed: () {
-              provider.dismissDropDialog();
-              Navigator.pop(ctx);
-              if (type == 'internet') {
-                AppSettings.openAppSettings(type: AppSettingsType.wifi);
-              } else {
-                AppSettings.openAppSettings(type: AppSettingsType.location);
-              }
-            },
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Buka Pengaturan'),
           ),
         ],
       ),
-    ).then((_) => provider.dismissDropDialog());
+    );
+
+    // Reset flag setelah dialog benar-benar ditutup
+    provider.dismissDropDialog();
+
+    if (result == true) {
+      // Buka pengaturan
+      if (type == 'internet') {
+        AppSettings.openAppSettings(type: AppSettingsType.wifi);
+      } else {
+        AppSettings.openAppSettings(type: AppSettingsType.location);
+      }
+    }
+    // Sekarang UI kembali normal, tidak ada panggilan ulang dialog
   }
 
   @override
@@ -184,10 +189,16 @@ class _StatusPageState extends State<StatusPage> {
                     isFixed: gps.isFixed,
                     latitude: gps.latitude.toStringAsFixed(5),
                     longitude: gps.longitude.toStringAsFixed(5),
-                    accuracy: gps.accuracyText,
-                    speed: '${gps.speed.toStringAsFixed(1)} km/j',
-                    bearing: '${gps.bearing.toStringAsFixed(1)}°',
-                    altitude: '${gps.altitude.toStringAsFixed(0)} m',
+                    accuracy: gps.isFixed ? '${gps.accuracy.toStringAsFixed(1)} m' : '--',
+                    speed: gps.isFixed
+                       ? (gps.speed >= 0.1 ? '${gps.speed.toStringAsFixed(1)} km/j' : '0 km/j')
+                       : '--',
+                    bearing: gps.isFixed
+                       ? '${gps.bearing.toStringAsFixed(1)}°'
+                       : '--',
+                    altitude: gps.isFixed
+                       ? '${gps.altitude.toStringAsFixed(0)} m'
+                       : '--',
                   ),
 
                   const SizedBox(height: 24),
