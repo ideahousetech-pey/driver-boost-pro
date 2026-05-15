@@ -20,7 +20,8 @@ dependencies:
   app_settings: ^5.1.1
   wakelock_plus: ^1.2.0   # untuk layar tetap menyala
   permission_handler: ^11.3.1     # untuk izin yang lebih baik
-  flutter_secure_storage: ^9.2.4   # penyimpanan data sensitif
+  flutter_secure_storage: ^9.2.4   # penyimpanan data sensitifflutter
+  device_info_plus: ^10.1.0   # versi terbaru
   # Untuk ping digunakan InternetAddress dari dart:io, sudah tersedia.
 
 dev_dependencies:

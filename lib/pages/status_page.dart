@@ -7,6 +7,7 @@ import '../widgets/metric_card.dart';
 import '../widgets/detail_connection.dart';
 import '../widgets/detail_gps.dart';
 import '../widgets/session_summary.dart';
+import '../widgets/xiaomi_guide_dialog.dart';
 
 class StatusPage extends StatefulWidget {
   const StatusPage({super.key});
@@ -267,6 +268,19 @@ class _StatusPageState extends State<StatusPage> {
       }
     }
 
+    // 👇 TAMPILKAN PANDUAN XIAOMI DI SINI
+    await XiaomiGuideDialog.showIfNeeded(context);
+
+    if (!mounted) return;
+    try {
+      await provider.startOptimizer();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  
     if (!mounted) return;
     try {
       await provider.startOptimizer();

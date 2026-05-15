@@ -54,6 +54,31 @@ class PengaturanPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
+                // -------------------- Pengaturan Lanjutan --------------------
+                _buildSectionTitle('Pengaturan Lanjutan', textTheme),
+                const SizedBox(height: 8),
+                Card(
+                  color: cardColor,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: ListTile(
+                    leading: const Icon(Icons.power_settings_new,
+                        color: AppColors.accentGreen),
+                    title: Text('Autostart & Baterai',
+                        style: textTheme.bodyLarge),
+                    subtitle: Text(
+                        'Cegah Xiaomi mematikan aplikasi.',
+                        style: textTheme.bodySmall),
+                    trailing: Icon(Icons.chevron_right,
+                        color: textTheme.bodySmall?.color ?? Colors.grey),
+                    onTap: () {
+                      AppSettings.openAppSettings(
+                          type: AppSettingsType.settings);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+
                 // -------------------- Interval Heartbeat --------------------
                 _buildSectionTitle('Interval Heartbeat', textTheme),
                 const SizedBox(height: 4),
