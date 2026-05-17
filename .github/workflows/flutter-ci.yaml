@@ -30,13 +30,7 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Analyze code (optional)
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
-
-      - name: Run tests (optional)
-        run: flutter test || true
-
-        - name: Decode keystore
+      - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/driver-optimizer.keystore
 
@@ -47,12 +41,8 @@ jobs:
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
           echo "storeFile=../driver-optimizer.keystore" >> android/key.properties
 
-      - name: Build release APK (signed)
-        run: flutter build apk --release
-
-      - name: Build obfuscated release APK
-        run: |
-          flutter build apk --release --obfuscate --split-debug-info=build/debug-info
+      - name: Build release APK (signed + obfuscated)
+        run: flutter build apk --release --obfuscate --split-debug-info=build/debug-info
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
