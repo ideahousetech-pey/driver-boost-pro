@@ -36,6 +36,17 @@ jobs:
       - name: Run tests (optional)
         run: flutter test || true
 
+        - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/driver-optimizer.keystore
+
+      - name: Create key.properties
+        run: |
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "storeFile=../driver-optimizer.keystore" >> android/key.properties
+
       - name: Build release APK (signed)
         run: flutter build apk --release
 
